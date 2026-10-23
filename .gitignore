@@ -1,0 +1,21 @@
+# Gitignore for M5Stack Unit C6L MeshCore project
+
+# Upstream repository & build artifacts
+MeshCore/
+.pio/
+.venv/
+venv/
+
+# Compiler debug files and temporary logs
+*.elf
+*.map
+*.log
+*.tmp
+*.sconsign*
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
