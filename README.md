@@ -103,6 +103,8 @@ To wipe all flash partitions completely, double-click `scripts\erase-flash.bat` 
 - **Upright XBM Graphics (`drawXBitmap`)**: Corrected LSB-first bit decoding for the MeshCore splash logo, Bluetooth icon, Wi-Fi icon, broadcast waves, and power button.
 - **Explicit Action Labels**: Added `HOLD: SEND` on the Advert screen, `HOLD: OFF` on the Shutdown screen, and `HOLD: ON/OFF` on the Wi-Fi screen.
 - **Dual-Button Navigation**: Front expander button (`P0`) and side button (`GPIO 9`) both wake the display and cycle menu pages.
+- **15-Second OLED Auto-Off & Click Wake-Up**: Wakes on button click without page jumping and automatically turns off the SSD1306 panel after 15 seconds of inactivity to protect the OLED from burn-in.
+- **Connection-Aware Silent Message Notifications**: Automatically silences message receive chimes and vibration while an interactive app connection is active (Bluetooth, USB wire, or Wi-Fi).
 - **SX1262 LDO Regulator Mode**: Configured `-D SX126X_USE_REGULATOR_LDO=true` to match the Stamp C6LoRa power topology.
 
 ---
@@ -201,4 +203,6 @@ Aby całkowicie wymazać wszystkie partycje pamięci Flash, kliknij dwukrotnie `
 - **Prawidłowe Renderowanie Ikon XBM (`drawXBitmap`)**: Zastosowano dekodowanie LSB-first, usuwając efekt lustrzanego odbicia logo powitalnego, ikony Bluetooth, ikony Wi-Fi, fal nadawania i przycisku zasilania.
 - **Czytelne Etykiety Akcji Pod Ikonami**: Dodano podpisy `HOLD: SEND` na ekranie rozgłaszania, `HOLD: OFF` na ekranie wyłączania oraz `HOLD: ON/OFF` na ekranie Wi-Fi.
 - **Nawigacja Dwoma Przyciskami**: Zarówno przedni przycisk ekspandera (`P0`), jak i boczny przycisk (`GPIO 9`) wybudzają ekran i zmieniają strony menu.
+- **Automatyczne Wygaszanie Ekranu po 15 Sekundach i Wybudzanie Przyciskiem**: Wybudza ekran po naciśnięciu przycisku bez przeskakiwania strony oraz samoczynnie wygasza panel SSD1306 po 15 sekundach bezczynności w celu ochrony przed wypaleniem.
+- **Wyciszanie Powiadomień Dźwiękowych przy Aktywnym Połączeniu**: Automatycznie wycisza sygnały dźwiękowe buzzera oraz wibracje przy nadejściu wiadomości, gdy urządzenie jest połączone z aplikacją (Bluetooth, kabel USB lub Wi-Fi).
 - **Tryb Regulatora LDO SX1262**: Włączono `-D SX126X_USE_REGULATOR_LDO=true`, co eliminuje zawieszanie się modułu radiowego na starcie.
