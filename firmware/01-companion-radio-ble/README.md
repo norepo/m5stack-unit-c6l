@@ -47,6 +47,13 @@ python esptool.py --chip esp32c6 --baud 921600 write_flash 0x0 bootloader.bin 0x
 ## Changelog & Hardware Fixes
 
 ### Latest Release Fixes
+- **OLED Text Wrap & Overwrite Fix**: Disabled text wrap (`display.setTextWrap(false)`) in `UnitC6LDisplay.h`. Adafruit_GFX defaults to `wrap = true`, which caused the 58-character scrolling status bar (`PL-test-m5stack-c6l | 0.00V | ...`) to wrap 6 times down the entire height of the 64x48 OLED every frame, overwriting all screens and tricking `getTextBounds` into thinking the text was static. Text now cleanly scrolls along line 0 (`y = 0..7`) without touching lower rows.
+- **64x48 OLED UI Layout Optimization**: Adapted `ui-tiny/UITask.cpp` for the compact 64x48 screen:
+  - `FIRST` page: Changed `setTextSize(2)` to `setTextSize(1)` so `MSG: %d`, `BAT: %.2fV`, and `PIN: %d` (or `Connected`) fit within the 64-pixel width without clipping or vertical collisions.
+  - `RADIO` page: Reorganized frequency, SF, bandwidth, CR, power, and noise floor into 4 clean lines without horizontal character overlap.
+  - `RECENT` page: Scaled vertical line pitch (`y += 9`) so up to 4 recent contact adverts fit cleanly between y=10 and y=44.
+  - `BLUETOOTH`, `ADVERT`, `SHUTDOWN` pages: Vertically centered 32x32 icons at `y = 11` directly below the scrolling status bar.
+- **Splash Screen Isolation**: Excluded status bar rendering while `SplashScreen` is active (`curr == splash`), allowing the MeshCore logo (centered) and build date to display cleanly on boot.
 - **Static BLE PIN `123456`**: Enabled `-D STATIC_BLE_PIN=1`. Prevents random PIN generation on boot, allowing straightforward, predictable pairing with PIN `123456`.
 - **Simultaneous USB + BLE Support**: Enabled `-D ENABLE_USB_INTERFACE` in the BLE environment. Both USB cable connection (Web Serial on https://app.meshcore.nz/) and Bluetooth work simultaneously.
 - **Dual-Button Navigation & Wake**: Added `UnitC6LButton` to read both the front button (`P0` on PI4IO expander) and the side button (`GPIO 9` BOOT). Pressing either button wakes the screen from sleep and cycles menu pages.
@@ -58,5 +65,6 @@ python esptool.py --chip esp32c6 --baud 921600 write_flash 0x0 bootloader.bin 0x
 - **OLED Display Orientation**: Added `display.setRotation(2)` (180° rotation) so that UI text and icons are right-side up when device antennas point upward.
 - **USB CDC Configuration**: Added `-D ARDUINO_USB_CDC_ON_BOOT=1` and `-D ARDUINO_USB_MODE=1` to ensure reliable Web Serial and USB log monitoring.
 - **Boot Fault Diagnostics**: Added visual fault feedback (RGB LED turns RED on `GPIO 2` and display outputs `"RADIO INIT / FAILED!"` if radio hardware initialization fails).
+
 
 
