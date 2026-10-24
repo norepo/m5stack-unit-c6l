@@ -1,4 +1,4 @@
-﻿diff --git a/examples/companion_radio/AbstractUITask.h b/examples/companion_radio/AbstractUITask.h
+diff --git a/examples/companion_radio/AbstractUITask.h b/examples/companion_radio/AbstractUITask.h
 index d927c1a3..94901dcb 100644
 --- a/examples/companion_radio/AbstractUITask.h
 +++ b/examples/companion_radio/AbstractUITask.h
@@ -91,7 +91,7 @@ index f32ea67a..809e3462 100644
    }
    if (strcmp(command, "get wifi.enabled") == 0) {
 diff --git a/examples/companion_radio/main.cpp b/examples/companion_radio/main.cpp
-index 839d4958..e30ff3ff 100644
+index 839d4958..51b0dd8e 100644
 --- a/examples/companion_radio/main.cpp
 +++ b/examples/companion_radio/main.cpp
 @@ -187,7 +187,9 @@ void setup() {
@@ -105,7 +105,7 @@ index 839d4958..e30ff3ff 100644
      if (disp != NULL && BLE_PIN_CODE == 123456) {
        StdRNG rng;
        the_mesh.setBLEPin(rng.nextInt(100000, 999999)); // random pin each session
-@@ -219,38 +221,40 @@ void setup() {
+@@ -219,31 +221,31 @@ void setup() {
    }
    // only start wifi if enabled and ssid is not empty
    wifi_enabled = the_mesh.getNodePrefs()->wifi_enabled;
@@ -119,14 +119,11 @@ index 839d4958..e30ff3ff 100644
 +            WiFi.disconnectReasonName((wifi_err_reason_t)info.wifi_sta_disconnected.reason));
 +          wifi_needs_reconnect = true;
 +      } else if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
-+          WIFI_DEBUG_PRINTLN("WiFi connected successfully! IP: %s", WiFi.localIP().toString().c_str());
++          WIFI_DEBUG_PRINTLN("WiFi connected successfully!");
 +          wifi_needs_reconnect = false;
 +      }
 +  });
 +#endif
-+
-+  wifi_interface.begin(TCP_PORT);
-+  interface_manager.addInterface(InterfaceType::WiFi, &wifi_interface);
 +
    if (wifi_enabled && wifi_ssid[0]) {
  #if defined(ESP32)
@@ -157,15 +154,6 @@ index 839d4958..e30ff3ff 100644
  #else
      WiFi.begin(wifi_ssid, wifi_pwd);
  #endif
--    wifi_interface.begin(TCP_PORT);
--    interface_manager.addInterface(InterfaceType::WiFi, &wifi_interface);
-   } else {
--    WIFI_DEBUG_PRINTLN("wifi disabled");
-+    WiFi.mode(WIFI_OFF);
-+    WIFI_DEBUG_PRINTLN("wifi disabled or ssid empty");
-   }
- #endif
- 
 diff --git a/examples/companion_radio/ui-tiny/ScrollingStatusBar.h b/examples/companion_radio/ui-tiny/ScrollingStatusBar.h
 index 9967489f..69156283 100644
 --- a/examples/companion_radio/ui-tiny/ScrollingStatusBar.h

@@ -19,10 +19,10 @@ Project repository containing precompiled **MeshCore 1.18** firmware, flashing t
 ```
 m5stack-unit-c6l/
 ├── firmware/
-│   ├── 01-companion-radio-ble/          # Bluetooth & Wi-Fi Companion Radio (Phone/Network App)
-│   │   ├── firmware.bin                 # Main application image (~2,098 KB)
+│   ├── 01-companion-radio-ble/          # Bluetooth Companion Radio (Phone App)
+│   │   ├── firmware.bin                 # Main application image (~1,472 KB)
 │   │   ├── bootloader.bin               # ESP32-C6 bootloader
-│   │   ├── partitions.bin               # Partition table (huge_app 3.0 MB)
+│   │   ├── partitions.bin               # Partition table (min_spiffs.csv)
 │   │   └── README.md                    # Bilingual companion documentation
 │   └── 02-repeater/                     # Standalone Relay / Repeater
 │       ├── firmware.bin                 # Main repeater image (~544 KB)
@@ -51,11 +51,12 @@ m5stack-unit-c6l/
 
 ### Firmware Roles
 
-#### 1. Companion Radio (BLE + Wi-Fi)
+#### 1. Companion Radio (BLE)
 - **Folder**: [`firmware/01-companion-radio-ble`](firmware/01-companion-radio-ble)
-- **Role**: Connects to the MeshCore mobile application via Bluetooth Low Energy or local Wi-Fi network (TCP port 5000) with dynamic random PIN pairing for BLE.
-- **Display**: 64x48 OLED with scrolling status bar, message counter, real-time connection status (BLE/USB/Wi-Fi), dedicated Wi-Fi toggle screen, and RF telemetry.
-- **Memory**: 58.6% RAM (192 KB / 328 KB), 66.7% Flash (2,098 KB / 3,146 KB with `huge_app.csv`).
+- **Role**: Connects to the MeshCore mobile application via Bluetooth Low Energy or USB Web Serial with dynamic random PIN pairing.
+- **Display**: 64x48 OLED with scrolling status bar, message counter, real-time connection status (BLE/USB), and RF telemetry.
+- **Memory**: 50.4% RAM (165 KB / 328 KB), 74.9% Flash (1,472 KB / 1,966 KB with `min_spiffs.csv`).
+- **Wi-Fi Architecture**: The ESP32-C6 has 320 KB internal SRAM and no external PSRAM. Running both the complete NimBLE 5.3 stack and Wi-Fi 6 TCP stack simultaneously causes heap exhaustion. To ensure 100% stability, Wi-Fi is preserved in code behind the `-D ENABLE_WIFI_INTERFACE` build flag but disabled by default in the companion release.
 
 #### 2. Repeater (Relay)
 - **Folder**: [`firmware/02-repeater`](firmware/02-repeater)
@@ -116,10 +117,10 @@ Repozytorium projektu zawierające skompilowane oprogramowanie **MeshCore 1.18**
 ```
 m5stack-unit-c6l/
 ├── firmware/
-│   ├── 01-companion-radio-ble/          # Radio towarzyszące Bluetooth i Wi-Fi (aplikacja na telefon/sieć)
-│   │   ├── firmware.bin                 # Obraz aplikacji (~2 098 KB)
+│   ├── 01-companion-radio-ble/          # Radio towarzyszące Bluetooth (aplikacja na telefon)
+│   │   ├── firmware.bin                 # Obraz aplikacji (~1 472 KB)
 │   │   ├── bootloader.bin               # Bootloader ESP32-C6
-│   │   ├── partitions.bin               # Tabela partycji (huge_app 3.0 MB)
+│   │   ├── partitions.bin               # Tabela partycji (min_spiffs.csv)
 │   │   └── README.md                    # Dwujęzyczna dokumentacja radia towarzyszącego
 │   └── 02-repeater/                     # Autonomiczny przekaźnik / repeater
 │       ├── firmware.bin                 # Obraz aplikacji przekaźnika (~544 KB)
@@ -148,11 +149,12 @@ m5stack-unit-c6l/
 
 ### Role Oprogramowania
 
-#### 1. Radio Towarzyszące — Companion Radio (BLE + Wi-Fi)
+#### 1. Radio Towarzyszące — Companion Radio (BLE)
 - **Katalog**: [`firmware/01-companion-radio-ble`](firmware/01-companion-radio-ble)
-- **Rola**: Łączy się z aplikacją mobilną MeshCore przez Bluetooth Low Energy lub lokalną sieć domową Wi-Fi (port TCP 5000) z wykorzystaniem dynamicznie generowanego kodu PIN dla BLE.
-- **Wyświetlacz**: Ekran 64x48 OLED z przewijanym paskiem statusu, licznikiem wiadomości, statusem połączenia (BLE/USB/Wi-Fi), dedykowanym ekranem przełączania Wi-Fi oraz parametrami radiowymi.
-- **Pamięć**: 58.6% RAM (192 KB / 328 KB), 66.7% Flash (2 098 KB / 3 146 KB z `huge_app.csv`).
+- **Rola**: Łączy się z aplikacją mobilną MeshCore przez Bluetooth Low Energy lub port szeregowy USB z wykorzystaniem dynamicznie generowanego kodu PIN dla BLE.
+- **Wyświetlacz**: Ekran 64x48 OLED z przewijanym paskiem statusu, licznikiem wiadomości, statusem połączenia (BLE/USB) oraz parametrami radiowymi.
+- **Pamięć**: 50.4% RAM (165 KB / 328 KB), 74.9% Flash (1 472 KB / 1 966 KB z `min_spiffs.csv`).
+- **Architektura Wi-Fi**: Układ ESP32-C6 posiada 320 KB pamięci SRAM i nie posiada zewnętrznej pamięci PSRAM. Jednoczesne uruchomienie stosu NimBLE 5.3 oraz Wi-Fi 6 TCP wyczerpuje dostępną pamięć sterty (heap) podczas startu. W celu zagwarantowania 100% stabilności, obsługa Wi-Fi została zachowana za flagą kompilacji `-D ENABLE_WIFI_INTERFACE`, lecz pozostaje wyłączona w wydaniu Companion.
 
 #### 2. Przekaźnik — Repeater (Relay)
 - **Katalog**: [`firmware/02-repeater`](firmware/02-repeater)
@@ -163,7 +165,7 @@ m5stack-unit-c6l/
 
 ### Szybki Start — Wgrywanie Oprogramowania
 
-#### Wgrywanie Radia Towarzyszącego (BLE + Wi-Fi)
+#### Wgrywanie Radia Towarzyszącego (BLE)
 - **Czyste Wgrywanie (Zalecane)**: Kliknij dwukrotnie `scripts\flash-companion-clean.bat` lub uruchom w PowerShell:
   ```powershell
   .\scripts\flash-companion.ps1 -Erase
