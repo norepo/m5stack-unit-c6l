@@ -1,6 +1,7 @@
 # PowerShell Flashing Script for M5Stack Unit C6L - Repeater
 param (
     [string]$Port = "",
+    [switch]$Erase,
     [switch]$SecondarySlot # If set, flashes to OTA slot 1 (0x1F0000) for dual-boot
 )
 
@@ -34,6 +35,10 @@ if ($SecondarySlot) {
 } else {
     Write-Host "Flashing Repeater as primary firmware (0x10000)..." -ForegroundColor Green
     if (Test-Path $EsptoolPath) {
+        if ($Erase) {
+            Write-Host "Erasing full flash memory (clean wipe)..." -ForegroundColor Yellow
+            & $PythonCmd $EsptoolPath --chip esp32c6 @PortArg --baud 921600 erase_flash
+        }
         & $PythonCmd $EsptoolPath --chip esp32c6 @PortArg --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 80m --flash_size 4MB 0x0 $Bootloader 0x8000 $Partitions 0x10000 $Firmware
     } else {
         if (Test-Path (Join-Path $ProjectRoot "MeshCore")) {
