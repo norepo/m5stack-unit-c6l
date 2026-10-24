@@ -1,0 +1,263 @@
+diff --git a/examples/companion_radio/main.cpp b/examples/companion_radio/main.cpp
+index 839d4958..418fed4c 100644
+--- a/examples/companion_radio/main.cpp
++++ b/examples/companion_radio/main.cpp
+@@ -187,7 +187,9 @@ void setup() {
+ 
+ #ifdef BLE_PIN_CODE // 123456 by default
+   if (the_mesh.getNodePrefs()->ble_pin == 0) {
+-#ifdef DISPLAY_CLASS
++#if defined(STATIC_BLE_PIN)
++    the_mesh.setBLEPin(BLE_PIN_CODE); // fixed static pin
++#elif defined(DISPLAY_CLASS)
+     if (disp != NULL && BLE_PIN_CODE == 123456) {
+       StdRNG rng;
+       the_mesh.setBLEPin(rng.nextInt(100000, 999999)); // random pin each session
+diff --git a/examples/companion_radio/ui-tiny/UITask.cpp b/examples/companion_radio/ui-tiny/UITask.cpp
+index 7b70f836..b8f487cf 100644
+--- a/examples/companion_radio/ui-tiny/UITask.cpp
++++ b/examples/companion_radio/ui-tiny/UITask.cpp
+@@ -55,27 +55,27 @@ public:
+ 
+   int render(DisplayDriver& display) override {
+     if (millis() < version_after) {
+-    // meshcore logo
+-    display.setColor(UIColor::corp_blue);
+-    int logoWidth = 72;
+-    display.drawXbm(0, 0, meshcore_logo, 72, 36);
++      // meshcore logo
++      display.setColor(UIColor::corp_blue);
++      int logo_x = (display.width() - 72) / 2;
++      int logo_y = (display.height() - 36) / 2;
++      display.drawXbm(logo_x, logo_y, meshcore_logo, 72, 36);
+     } else {
++      // meshcore website
++      const char* website = "meshcore.io";
++      display.setColor(UIColor::primary_txt);
++      display.setTextSize(1);
++      uint16_t websiteWidth = display.getTextWidth(website);
++      display.setCursor((display.width() - websiteWidth) / 2, (display.height() <= 48) ? 10 : 9);
++      display.print(website);
++
++      // version info
++      display.setTextSize(1);
++      display.drawTextCentered(display.width()/2, (display.height() <= 48) ? 21 : 18, _version_info);
+ 
+-    // meshcore website
+-    const char* website = "meshcore.io";
+-    display.setColor(UIColor::primary_txt);
+-    display.setTextSize(1);
+-    uint16_t websiteWidth = display.getTextWidth(website);
+-    display.setCursor((display.width() - websiteWidth) / 2, 9);
+-    display.print(website);
+-
+-    // version info
+-    display.setTextSize(1);
+-    display.drawTextCentered(display.width()/2, 18, _version_info);
+-
+-    display.setColor(UIColor::secondary_txt);
+-    display.setTextSize(1);
+-    display.drawTextCentered(display.width()/2, 27, FIRMWARE_BUILD_DATE);
++      display.setColor(UIColor::secondary_txt);
++      display.setTextSize(1);
++      display.drawTextCentered(display.width()/2, (display.height() <= 48) ? 32 : 27, FIRMWARE_BUILD_DATE);
+     }
+     return 1000;
+   }
+@@ -154,47 +154,67 @@ public:
+     char tmp[80];
+ 
+     if (_page == HomePage::FIRST) {
+-      // // node name
+-      // display.setTextSize(1);
+-      // display.setColor(DisplayDriver::GREEN);
+-      // char filtered_name[sizeof(_node_prefs->node_name)];
+-      // display.translateUTF8ToBlocks(filtered_name, _node_prefs->node_name, sizeof(filtered_name));
+-      // display.setCursor(0, 0);
+-      // display.print(filtered_name);
+-
+-
+-      display.setColor(UIColor::primary_txt);
+-      display.setTextSize(2);
+-      sprintf(tmp, "MSG: %d", _task->getMsgCount());
+-      display.setCursor(0, 10);
+-      display.print(tmp);
+-
+-      sprintf(tmp, "BATT: %.2fV", _task->getCachedBattMV() / 1000.0f);
+-      display.setCursor(0, 19);
+-      display.print(tmp);
+-
+-      #ifdef ENABLE_WIFI_INTERFACE
+-        IPAddress ip = WiFi.localIP();
+-        snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+-        display.setTextSize(1);
+-        display.drawTextCentered(display.width() / 2, 54, tmp);
+-      #endif
+-      if (_task->hasConnection()) {
+-        display.setColor(UIColor::warning_txt);
++      if (display.width() <= 64) {
++        display.setColor(UIColor::primary_txt);
+         display.setTextSize(1);
+-        display.drawTextCentered(display.width() / 2, display.height()-8, "< Connected >");
++        sprintf(tmp, "MSG: %d", _task->getMsgCount());
++        display.setCursor(2, 11);
++        display.print(tmp);
+ 
+-      } else if (the_mesh.getBLEPin() != 0) { // BT pin
+-        display.setColor(UIColor::warning_txt);
++        sprintf(tmp, "BAT: %.2fV", _task->getCachedBattMV() / 1000.0f);
++        display.setCursor(2, 22);
++        display.print(tmp);
++
++        #ifdef ENABLE_WIFI_INTERFACE
++          IPAddress ip = WiFi.localIP();
++          snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
++          display.drawTextCentered(display.width() / 2, 35, tmp);
++        #else
++          if (_task->hasConnection()) {
++            display.setColor(UIColor::warning_txt);
++            display.drawTextCentered(display.width() / 2, 35, "Connected");
++          } else if (the_mesh.getBLEPin() != 0) { // BT pin
++            display.setColor(UIColor::warning_txt);
++            sprintf(tmp, "PIN:%d", the_mesh.getBLEPin());
++            display.drawTextCentered(display.width() / 2, 35, tmp);
++          }
++        #endif
++      } else {
++        display.setColor(UIColor::primary_txt);
+         display.setTextSize(2);
+-        sprintf(tmp, "Pin:%d", the_mesh.getBLEPin());
+-        display.drawTextCentered(display.width() / 2, display.height()-8, tmp);
++        sprintf(tmp, "MSG: %d", _task->getMsgCount());
++        display.setCursor(0, 10);
++        display.print(tmp);
++
++        sprintf(tmp, "BATT: %.2fV", _task->getCachedBattMV() / 1000.0f);
++        display.setCursor(0, 19);
++        display.print(tmp);
++
++        #ifdef ENABLE_WIFI_INTERFACE
++          IPAddress ip = WiFi.localIP();
++          snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
++          display.setTextSize(1);
++          display.drawTextCentered(display.width() / 2, 54, tmp);
++        #endif
++        if (_task->hasConnection()) {
++          display.setColor(UIColor::warning_txt);
++          display.setTextSize(1);
++          display.drawTextCentered(display.width() / 2, display.height()-8, "< Connected >");
++
++        } else if (the_mesh.getBLEPin() != 0) { // BT pin
++          display.setColor(UIColor::warning_txt);
++          display.setTextSize(2);
++          sprintf(tmp, "Pin:%d", the_mesh.getBLEPin());
++          display.drawTextCentered(display.width() / 2, display.height()-8, tmp);
++        }
+       }
+     } else if (_page == HomePage::RECENT) {
+       the_mesh.getRecentlyHeard(recent, UI_RECENT_LIST_SIZE);
+       display.setColor(UIColor::primary_txt);
+-      int y = 8;
+-      for (int i = 0; i < UI_RECENT_LIST_SIZE; i++, y += 11) {
++      int y = (display.height() <= 48) ? 10 : 8;
++      int y_step = (display.height() <= 48) ? 9 : 11;
++      int max_recent = (display.height() <= 48) ? 4 : UI_RECENT_LIST_SIZE;
++      for (int i = 0; i < max_recent; i++, y += y_step) {
+         auto a = &recent[i];
+         if (a->name[0] == 0) continue;  // empty slot
+         int secs = _rtc->getCurrentTime() - a->recv_timestamp;
+@@ -218,35 +238,57 @@ public:
+     } else if (_page == HomePage::RADIO) {
+       display.setColor(UIColor::primary_txt);
+       display.setTextSize(1);
+-      // frequency and spreading factor
+-      display.setCursor(0, 8);
+-      sprintf(tmp, "FQ %06.3f", _node_prefs->freq);
+-      display.print(tmp);
+-      sprintf(tmp, "SF%d", _node_prefs->sf);
+-      display.drawTextRightAlign(display.width(), 8, tmp);
+-      // bandwidth and coding rate
+-      display.setCursor(0, 17);
+-      sprintf(tmp, "BW %03.2f", _node_prefs->bw);
+-      display.print(tmp);
+-      sprintf(tmp, "CR%d", _node_prefs->cr);
+-      display.drawTextRightAlign(display.width(), 17, tmp);
+-      // tx power and noise floor
+-      display.setCursor(0, 26);
+-      sprintf(tmp, "NF %ddB", radio_driver.getNoiseFloor());
+-      display.print(tmp);
+-      sprintf(tmp, "TX%d", _node_prefs->tx_power_dbm);
+-      display.drawTextRightAlign(display.width(), 26, tmp);
++      if (display.width() <= 64) {
++        display.setCursor(0, 10);
++        sprintf(tmp, "%.2f", _node_prefs->freq);
++        display.print(tmp);
++        sprintf(tmp, "SF%d", _node_prefs->sf);
++        display.drawTextRightAlign(display.width(), 10, tmp);
++
++        display.setCursor(0, 19);
++        sprintf(tmp, "BW:%.0f", _node_prefs->bw);
++        display.print(tmp);
++        sprintf(tmp, "CR%d", _node_prefs->cr);
++        display.drawTextRightAlign(display.width(), 19, tmp);
++
++        display.setCursor(0, 28);
++        sprintf(tmp, "TX:%ddBm", _node_prefs->tx_power_dbm);
++        display.print(tmp);
++
++        display.setCursor(0, 37);
++        sprintf(tmp, "NF:%ddB", radio_driver.getNoiseFloor());
++        display.print(tmp);
++      } else {
++        // frequency and spreading factor
++        display.setCursor(0, 8);
++        sprintf(tmp, "FQ %06.3f", _node_prefs->freq);
++        display.print(tmp);
++        sprintf(tmp, "SF%d", _node_prefs->sf);
++        display.drawTextRightAlign(display.width(), 8, tmp);
++        // bandwidth and coding rate
++        display.setCursor(0, 17);
++        sprintf(tmp, "BW %03.2f", _node_prefs->bw);
++        display.print(tmp);
++        sprintf(tmp, "CR%d", _node_prefs->cr);
++        display.drawTextRightAlign(display.width(), 17, tmp);
++        // tx power and noise floor
++        display.setCursor(0, 26);
++        sprintf(tmp, "NF %ddB", radio_driver.getNoiseFloor());
++        display.print(tmp);
++        sprintf(tmp, "TX%d", _node_prefs->tx_power_dbm);
++        display.drawTextRightAlign(display.width(), 26, tmp);
++      }
+ 
+     } else if (_page == HomePage::BLUETOOTH) {
+       display.setColor(UIColor::corp_blue);
+-      display.drawXbm((display.width() - 32) / 2, 8,
++      display.drawXbm((display.width() - 32) / 2, (display.height() <= 48) ? 11 : 8,
+           _task->isBluetoothEnabled() ? bluetooth_on : bluetooth_off,
+           32, 32);
+       display.setTextSize(1);
+       // display.drawTextCentered(display.width() / 2, 40 - 11, "toggle: " PRESS_LABEL);
+     } else if (_page == HomePage::ADVERT) {
+       display.setColor(UIColor::corp_blue);
+-      display.drawXbm((display.width() - 32) / 2, 8, advert_icon, 32, 32);
++      display.drawXbm((display.width() - 32) / 2, (display.height() <= 48) ? 11 : 8, advert_icon, 32, 32);
+       // display.drawTextCentered(display.width() / 2, 40 - 11, "advert: " PRESS_LABEL);
+ #if ENV_INCLUDE_GPS == 1
+     } else if (_page == HomePage::GPS) {
+@@ -704,12 +746,14 @@ void UITask::loop() {
+         getGPSState(),
+         isBluetoothEnabled());
+ 
+-    bool status_dirty = _statusBar.needsRedraw();
++    bool status_dirty = (curr != splash) && _statusBar.needsRedraw();
+     bool content_dirty = (millis() >= _next_refresh && curr);
+ 
+     if (status_dirty || content_dirty) {
+       _display->startFrame();
+-      _statusBar.render(*_display);
++      if (curr != splash) {
++        _statusBar.render(*_display);
++      }
+ 
+       if (curr) {
+         int delay_millis = curr->render(*_display);

@@ -31,6 +31,7 @@ public:
     bool ok = display.begin(SSD1306_SWITCHCAPVCC, 0, true, false);
     if (ok) {
       display.setRotation(2); // Flip 180 deg so screen is right-side up with antenna pointing up
+      display.setTextWrap(false);
       display.ssd1306_command(SSD1306_SETCOMPINS);
       display.ssd1306_command(0x12);
       display.ssd1306_command(SSD1306_SETCONTRAST);
@@ -63,11 +64,13 @@ public:
     _color = SSD1306_WHITE;
     display.setTextColor(_color);
     display.setTextSize(1);
+    display.setTextWrap(false);
     display.cp437(true);
   }
 
   void setTextSize(int sz) override {
     display.setTextSize(sz);
+    display.setTextWrap(false);
   }
 
   void setColor(ColorVal c) override {
