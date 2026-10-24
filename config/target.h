@@ -9,10 +9,20 @@
 #include <helpers/AutoDiscoverRTCClock.h>
 #include <helpers/SensorManager.h>
 
+#ifdef DISPLAY_CLASS
+  #include <helpers/ui/MomentaryButton.h>
+  #include "UnitC6LDisplay.h"
+#endif
+
 extern UnitC6LBoard board;
 extern WRAPPER_CLASS radio_driver;
 extern AutoDiscoverRTCClock rtc_clock;
 extern SensorManager sensors;
+
+#ifdef DISPLAY_CLASS
+  extern DISPLAY_CLASS display;
+  extern MomentaryButton user_btn;
+#endif
 
 bool radio_init();
 mesh::LocalIdentity radio_new_identity();
