@@ -60,10 +60,9 @@ m5stack-unit-c6l/
 ## Quick Start — Flashing
 
 ### Flash Companion Radio (BLE)
-Double-click `scripts\flash-companion.bat` or run:
-```powershell
-.\scripts\flash-companion.ps1
-```
+- **Standard Flash**: Double-click `scripts\flash-companion.bat` or run `.\scripts\flash-companion.ps1`
+- **Clean Flash (Full Erase)**: Double-click `scripts\flash-companion-clean.bat` or run `.\scripts\flash-companion.ps1 -Erase` (recommended when switching firmware or resetting node credentials)
+
 
 ### Flash Repeater
 Double-click `scripts\flash-repeater.bat` or run:

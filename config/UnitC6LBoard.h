@@ -10,4 +10,8 @@ public:
   const char* getManufacturerName() const override {
     return "M5Stack Unit C6L";
   }
+
+  bool isExternalPowered() override {
+    return true;
+  }
 };

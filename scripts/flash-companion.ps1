@@ -1,6 +1,7 @@
 # PowerShell Flashing Script for M5Stack Unit C6L - Companion Radio (BLE)
 param (
-    [string]$Port = ""
+    [string]$Port = "",
+    [switch]$Erase
 )
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -24,6 +25,10 @@ if ($Port -ne "") {
 }
 
 if (Test-Path $EsptoolPath) {
+    if ($Erase) {
+        Write-Host "Erasing full flash memory (clean wipe)..." -ForegroundColor Yellow
+        & $PythonCmd $EsptoolPath --chip esp32c6 @PortArg --baud 921600 erase_flash
+    }
     Write-Host "Using PlatformIO esptool: $EsptoolPath" -ForegroundColor Green
     & $PythonCmd $EsptoolPath --chip esp32c6 @PortArg --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 80m --flash_size 4MB 0x0 $Bootloader 0x8000 $Partitions 0x10000 $Firmware
 } else {

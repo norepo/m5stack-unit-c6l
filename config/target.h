@@ -21,7 +21,7 @@ extern SensorManager sensors;
 
 #ifdef DISPLAY_CLASS
   extern DISPLAY_CLASS display;
-  extern MomentaryButton user_btn;
+  extern MomentaryButton& user_btn;
 #endif
 
 bool radio_init();
