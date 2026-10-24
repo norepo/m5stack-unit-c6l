@@ -4,9 +4,9 @@ Firmware role for **M5Stack Unit C6L** that connects over Bluetooth Low Energy (
 
 ## Binary Details
 - **Build Target**: `M5Stack_Unit_C6L_companion_radio_ble`
-- **Firmware Size**: ~1,507 KB
-- **RAM Usage**: 50.3% (165 KB / 328 KB)
-- **Flash Usage**: 75.2% (1,478 KB / 1,966 KB)
+- **Firmware Size**: ~1,500 KB
+- **RAM Usage**: 50.3% (164.8 KB / 328 KB)
+- **Flash Usage**: 74.8% (1,470 KB / 1,966 KB)
 - **Bluetooth PIN**: `123456`
 - **Flash Mode**: `DIO` (80 MHz)
 

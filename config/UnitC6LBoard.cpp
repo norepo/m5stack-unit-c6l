@@ -50,6 +50,19 @@ static uint8_t pi4io_read(uint8_t reg) {
 void UnitC6LBoard::begin() {
   ESP32Board::begin();
 
+  // Set SPI chip selects HIGH before any SPI transactions occur to prevent bus contention
+  pinMode(P_LORA_NSS, OUTPUT);
+  digitalWrite(P_LORA_NSS, HIGH); // LoRa SX1262 CS (GPIO 23)
+  pinMode(6, OUTPUT);
+  digitalWrite(6, HIGH);          // OLED SSD1306 CS (GPIO 6)
+
+  // Release OLED Display from hardware reset (GPIO 15)
+  pinMode(15, OUTPUT);
+  digitalWrite(15, HIGH);
+
+  // Turn off NeoPixel LED on GPIO 2
+  neopixelWrite(2, 0, 0, 0);
+
   // Onboard I2C is GPIO 10 (SDA), GPIO 8 (SCL)
   Wire.begin(10, 8);
 
@@ -69,17 +82,13 @@ void UnitC6LBoard::begin() {
   delay(10);
   pi4io_write(PI4IO_REG_INT_MASK, 0b11111100);
   delay(10);
-  // Enable LNA (P5=1), Antenna RF Switch (P6=1), and release SX1262 Reset (P7=1)
-  pi4io_write(PI4IO_REG_OUT_SET, 0b11100000);
-  delay(10);
+
+  // Clean hardware reset of SX1262: hold P7 LOW for 100ms, then release HIGH with LNA & ANT_SW active
+  pi4io_write(PI4IO_REG_OUT_SET, 0b01100000); // P7 LOW (in reset), P6=1 (ANT_SW), P5=1 (LNA_EN)
+  delay(100);
+  pi4io_write(PI4IO_REG_OUT_SET, 0b11100000); // P7 HIGH (release reset), P6=1, P5=1
+  delay(50);
   pi4io_read(PI4IO_REG_IRQ_STA); // clear any pending IRQ
-
-  // Turn off NeoPixel LED on GPIO 2
-  neopixelWrite(2, 0, 0, 0);
-
-  // Release OLED Display from hardware reset (GPIO 15)
-  pinMode(15, OUTPUT);
-  digitalWrite(15, HIGH);
 
   // Initialize shared SPI pins early so display and radio both have bus access
 #if defined(P_LORA_SCLK)
@@ -122,10 +131,22 @@ bool radio_init() {
 
 #if defined(P_LORA_SCLK)
   spi.begin(P_LORA_SCLK, P_LORA_MISO, P_LORA_MOSI);
-  return radio.std_init(&spi);
+  bool ok = radio.std_init(&spi);
 #else
-  return radio.std_init();
+  bool ok = radio.std_init();
 #endif
+
+  if (!ok) {
+    neopixelWrite(2, 64, 0, 0); // Red LED alert to indicate radio init failure
+#ifdef DISPLAY_CLASS
+    display.startFrame();
+    display.setTextSize(1);
+    display.drawTextCentered(display.width() / 2, 12, "RADIO INIT");
+    display.drawTextCentered(display.width() / 2, 28, "FAILED!");
+    display.endFrame();
+#endif
+  }
+  return ok;
 }
 
 mesh::LocalIdentity radio_new_identity() {
