@@ -1,4 +1,4 @@
-# MeshCore 1.18 — Companion Radio (BLE + Wi-Fi)
+# MeshCore 1.18 — Companion Radio (BLE)
 
 [English](#english) | [Polski](#polski)
 
@@ -7,15 +7,14 @@
 <a id="english"></a>
 ## English
 
-Firmware role for **M5Stack Unit C6L** that connects over Bluetooth Low Energy (BLE), USB Web Serial, or local 2.4GHz Wi-Fi (TCP port 5000) to mobile apps (e.g. MeshCore App / Web Flasher).
+Firmware role for **M5Stack Unit C6L** that connects over Bluetooth Low Energy (BLE) or USB Web Serial to mobile apps (e.g. MeshCore App / Web Flasher).
 
 ### Binary Details
 - **Build Target**: `M5Stack_Unit_C6L_companion_radio_ble`
-- **Firmware Size**: ~2,120 KB
-- **RAM Usage**: 58.6% (192 KB / 328 KB)
-- **Flash Usage**: 66.7% (2,098 KB / 3,145 KB) via `huge_app.csv`
+- **Firmware Size**: ~1,472 KB (1,537,936 bytes)
+- **RAM Usage**: 50.4% (165 KB / 328 KB)
+- **Flash Usage**: 74.9% (1,472 KB / 1,966 KB) via `min_spiffs.csv`
 - **Bluetooth PIN**: Random 6-digit PIN on boot (displayed on screen)
-- **Wi-Fi TCP Server**: Active on TCP port `5000`
 - **Flash Mode**: `DIO` (80 MHz)
 
 ### Files
@@ -54,54 +53,20 @@ python esptool.py --chip esp32c6 --baud 921600 write_flash 0x0 bootloader.bin 0x
 
 ---
 
-### Wi-Fi Configuration & Long-Range Network Management
-
-The M5Stack Unit C6L ESP32-C6 supports simultaneous BLE, USB, and 2.4GHz Wi-Fi 6. You can configure the device with your home Wi-Fi credentials to place it anywhere in or around your house and manage it over your local network without needing to stay in Bluetooth range.
-
-#### 1. Configuring Wi-Fi Credentials
-Connect to the device via Bluetooth (using the random PIN displayed on screen) or via USB in the MeshCore Web App (https://app.meshcore.nz/) or mobile app:
-1. Open the **Terminal / CLI** in the app.
-2. Enter your home Wi-Fi network details:
-   ```
-   set wifi.ssid YourHomeNetwork
-   set wifi.pwd YourHomePassword
-   set wifi.enabled 1
-   ```
-3. The device immediately connects to your Wi-Fi router and requests an IP address via DHCP.
-
-#### 2. The Dedicated Wi-Fi Screen (`HomePage::WIFI`)
-Cycle through menu screens using single button clicks:
-`FIRST` -> `RECENT` -> `RADIO` -> `BLUETOOTH` -> `WIFI` -> `ADVERT` -> `SHUTDOWN`
-
-- **When Disconnected / Disabled**: Displays the 32x32 Wi-Fi icon (`wifi_on` or `wifi_off`) and status (`WIFI: OFF`, `No SSID`, or `Connecting`). Long-pressing the button toggles Wi-Fi ON / OFF and saves the preference to flash.
-- **When Connected**: Displays:
-  ```
-  WiFi: Connected
-     Home-WiFi
-     192.168.
-    1.105:5000
-  ```
-  The full IP address and TCP port (`5000`) are shown clearly across two lines with zero text clipping.
-
-#### 3. Connecting to the Companion Over Wi-Fi
-In the MeshCore mobile app or desktop tools:
-- Select **Connect via TCP / Network**.
-- Enter the device's local IP address (e.g. `192.168.1.105`) and Port `5000`.
-- You can now manage contacts, send messages, and monitor packets from anywhere within your home Wi-Fi coverage!
+### Hardware Architecture: Bluetooth, Wi-Fi & ESP32-C6 Memory
+The M5Stack Unit C6L is powered by an ESP32-C6 RISC-V SoC with **320 KB internal SRAM** and 4 MB external NOR flash, without external PSRAM.
+- In this companion role, the Semtech SX1262 LoRa transceiver driver, SSD1306 OLED display driver, 256-packet offline buffer, and the complete NimBLE 5.3 stack require ~165 KB of static RAM and ~70 KB of active heap.
+- Enabling the complete ESP32 Wi-Fi 6 subsystem and TCP server concurrently alongside the full BLE stack exhausts internal SRAM heap during initial FreeRTOS task startup, which can trigger memory allocation panics and watchdog bootloops.
+- **Clean Architecture & Feature Flag**: The complete Wi-Fi interface code and UI toggle screens remain implemented in the codebase under the build flag `; -D ENABLE_WIFI_INTERFACE`. However, for the official Companion BLE release, Wi-Fi is disabled by default to ensure 100% stable heap headroom, zero bootloop risk, and rock-solid Bluetooth Low Energy performance.
 
 ---
 
 ### Changelog & Hardware Fixes
 
 #### Latest Release Fixes
-- **Wi-Fi Interface & Dedicated Toggle Screen (`HomePage::WIFI`)**:
-  - Integrated `SerialWifiInterface` running on TCP port `5000`.
-  - Added dedicated `WIFI` screen in the menu carousel with long-press toggle and real-time connection telemetry.
-  - Dynamically connects upon CLI configuration without requiring a manual reboot.
-  - Updated scrolling top status bar to include `WIFI:CONN`, `WIFI:ON`, or `WIFI:OFF`.
-- **Partition Layout Scaled to `huge_app.csv`**:
-  - To accommodate the complete BLE 5.3 stack, 2.4GHz Wi-Fi 6 subsystem, and OLED graphics simultaneously, the partition table was updated to `huge_app.csv`.
-  - Allocates 3.0 MB for the application partition (`app0`, 66.7% used) and 896 KB for SPIFFS (`0xE0000`), providing ample storage for message logs and contacts.
+- **Stability Fix (Zero Bootloop & Heap Protection)**:
+  - Preserved Wi-Fi code behind `-D ENABLE_WIFI_INTERFACE`, but disabled by default in companion build to maintain generous heap margin on the 320 KB SRAM ESP32-C6.
+  - Reverted partition layout back to `min_spiffs.csv` (1.875 MB app partition, 74.9% used).
 - **Phantom GPS Screen Eliminated (`-UENV_INCLUDE_GPS`)**: The M5Stack Unit C6L has no onboard GPS hardware. Previously, `ENV_INCLUDE_GPS=1` was inherited from base configurations, creating a broken GPS page in the menu cycle that attempted to print both `"gps off"` and `"Can't access GPS"` at the identical coordinate `y=8`, causing the jumbled `Gps ' df 1 cces` artifact. Adding `-UENV_INCLUDE_GPS` and removing unused GPS pins completely removes this screen from the menu cycle.
 - **Prominent Bluetooth PIN on First Screen**:
   - Replaced the unused battery voltage on the first (`FIRST`) screen with the random 6-digit Bluetooth PIN (`PIN:%06d` at `y=23`, centered).
@@ -138,15 +103,14 @@ In the MeshCore mobile app or desktop tools:
 <a id="polski"></a>
 ## Polski
 
-Rola oprogramowania dla **M5Stack Unit C6L**, łącząca się za pośrednictwem Bluetooth Low Energy (BLE), portu szeregowego USB oraz lokalnej sieci Wi-Fi 2.4 GHz (port TCP 5000) z aplikacjami mobilnymi (np. Aplikacja MeshCore / Web Flasher).
+Rola oprogramowania dla **M5Stack Unit C6L**, łącząca się za pośrednictwem Bluetooth Low Energy (BLE) oraz portu szeregowego USB z aplikacjami mobilnymi (np. Aplikacja MeshCore / Web Flasher).
 
 ### Szczegóły Oprogramowania
 - **Środowisko kompilacji**: `M5Stack_Unit_C6L_companion_radio_ble`
-- **Rozmiar binariów**: ~2 120 KB
-- **Użycie pamięci RAM**: 58.6% (192 KB / 328 KB)
-- **Użycie pamięci Flash**: 66.7% (2 098 KB / 3 145 KB) w układzie partycji `huge_app.csv`
+- **Rozmiar binariów**: ~1 472 KB (1 537 936 bajtów)
+- **Użycie pamięci RAM**: 50.4% (165 KB / 328 KB)
+- **Użycie pamięci Flash**: 74.9% (1 472 KB / 1 966 KB) w układzie partycji `min_spiffs.csv`
 - **Kod PIN Bluetooth**: Losowy 6-cyfrowy kod generowany przy każdym uruchomieniu (wyświetlany na ekranie)
-- **Serwer Wi-Fi TCP**: Aktywny na porcie TCP `5000`
 - **Tryb pamięci Flash**: `DIO` (80 MHz)
 
 ### Pliki
@@ -185,54 +149,20 @@ python esptool.py --chip esp32c6 --baud 921600 write_flash 0x0 bootloader.bin 0x
 
 ---
 
-### Konfiguracja Wi-Fi i Zarządzanie w Sieci Domowej
-
-Układ ESP32-C6 w module M5Stack Unit C6L obsługuje jednocześnie łączność Bluetooth LE, port szeregowy USB oraz sieć bezprzewodową Wi-Fi 6 (2.4 GHz). Umożliwia to skonfigurowanie danych sieci domowej i umieszczenie urządzenia w dowolnym miejscu domu lub ogrodu z dala od zasięgu Bluetooth, zachowując pełne zarządzanie przez sieć lokalną.
-
-#### 1. Wprowadzanie Danych Sieci Wi-Fi
-Połącz się z urządzeniem przez Bluetooth (korzystając z kodu PIN wyświetlanego na ekranie) lub kablem USB w aplikacji MeshCore (https://app.meshcore.nz/):
-1. Otwórz zakładkę **Terminal / CLI** w aplikacji.
-2. Wpisz parametry swojej sieci Wi-Fi:
-   ```
-   set wifi.ssid TwojaNazwaSieci
-   set wifi.pwd TwojeHasloWiFi
-   set wifi.enabled 1
-   ```
-3. Urządzenie natychmiast nawiąże połączenie z routerem i pobierze adres IP przez DHCP.
-
-#### 2. Dedykowany Ekran Wi-Fi (`HomePage::WIFI`)
-Przełączanie stron odbywa się pojedynczym kliknięciem przycisku:
-`FIRST` -> `RECENT` -> `RADIO` -> `BLUETOOTH` -> `WIFI` -> `ADVERT` -> `SHUTDOWN`
-
-- **Gdy Rozłączone / Wyłączone**: Wyświetla ikonę Wi-Fi 32x32 (`wifi_on` lub `wifi_off`) oraz stan (`WIFI: OFF`, `No SSID` lub `Connecting`). Przytrzymanie przycisku włącza lub wyłącza Wi-Fi i zapisuje stan w pamięci flash.
-- **Gdy Połączone**: Wyświetla szczegóły połączenia:
-  ```
-  WiFi: Connected
-     TwojaSiec
-     192.168.
-    1.105:5000
-  ```
-  Pełny adres IP oraz port TCP (`5000`) są wyświetlane w dwóch czytelnych liniach bez obcinania tekstu.
-
-#### 3. Łączenie z Radiem przez Wi-Fi
-W aplikacji mobilnej MeshCore lub w narzędziach komputerowych:
-- Wybierz opcję **Connect via TCP / Network**.
-- Wpisz lokalny adres IP urządzenia (np. `192.168.1.105`) oraz port `5000`.
-- Możesz teraz wysyłać wiadomości, zarządzać kontaktami i monitorować sieć mesh z dowolnego miejsca w zasięgu domowej sieci Wi-Fi!
+### Architektura Sprzętowa: Bluetooth, Wi-Fi i Pamięć ESP32-C6
+Moduł M5Stack Unit C6L bazuje na jednoukładowym mikrokontrolerze ESP32-C6 RISC-V z **320 KB wewnętrznej pamięci SRAM** oraz 4 MB pamięci flash (bez zewnętrznej pamięci PSRAM).
+- W roli Companion, sterownik radia Semtech SX1262, sterownik wyświetlacza OLED SSD1306, kolejka 256 pakietów offline oraz kompletny stos NimBLE 5.3 zajmują ~165 KB pamięci statycznej oraz ~70 KB aktywnej sterty.
+- Jednoczesne uruchomienie podsystemu Wi-Fi 6 i serwera TCP obok pełnego stosu BLE wyczerpuje dostępną pamięć sterty FreeRTOS przy starcie, co może prowadzić do restartów urządzenia w pętli (bootloop).
+- **Flaga Wydania (Feature Flag)**: Kompletny kod obsługi Wi-Fi oraz dedykowany ekran kontrolny pozostały zaimplementowane w kodzie za flagą kompilacji `; -D ENABLE_WIFI_INTERFACE`. W oficjalnym wydaniu Companion BLE obsługa Wi-Fi pozostaje domyślnie wyłączona, co gwarantuje 100% stabilności pracy, odpowiedni zapas pamięci RAM oraz niezawodną łączność Bluetooth.
 
 ---
 
 ### Historia Zmian i Poprawki Sprzętowe
 
 #### Najnowsze Poprawki
-- **Obsługa Wi-Fi i Dedykowany Ekran Przełączania (`HomePage::WIFI`)**:
-  - Zintegrowano interfejs `SerialWifiInterface` nasłuchujący na porcie TCP `5000`.
-  - Dodano dedykowany ekran `WIFI` w karuzeli menu z możliwością włączania i wyłączania przez długie przytrzymanie przycisku oraz podglądem parametrów połączenia.
-  - Automatyczne łączenie zaraz po skonfigurowaniu danych w CLI bez wymogu restartu urządzenia.
-  - Zaktualizowano przewijany pasek statusu, aby pokazywał `WIFI:CONN`, `WIFI:ON` lub `WIFI:OFF`.
-- **Tabela Partycji Rozszerzona do `huge_app.csv`**:
-  - Aby pomieścić pełny stos Bluetooth 5.3, podsystem Wi-Fi 6 oraz biblioteki graficzne SSD1306, zmieniono tabelę partycji z `min_spiffs.csv` na `huge_app.csv`.
-  - Przydzielono 3.0 MB na partycję aplikacji (`app0`, zajęte w 66.7%) oraz 896 KB na partycję SPIFFS (`0xE0000`), co zapewnia dużą przestrzeń na bazę kontaktów i wiadomości.
+- **Poprawka Stabilności (Eliminacja Bootloop i Ochrona Pamięci Heap)**:
+  - Zachowano kod Wi-Fi za flagą `-D ENABLE_WIFI_INTERFACE`, domyślnie wyłączoną w wydaniu Companion w celu zachowania bezpiecznego marginesu pamięci na ESP32-C6 (320 KB SRAM).
+  - Przywrócono układ partycji `min_spiffs.csv` (partycja aplikacji 1.875 MB, zajęta w 74.9%).
 - **Usunięcie Nieprawidłowego Ekranu GPS (`-UENV_INCLUDE_GPS`)**: Moduł M5Stack Unit C6L nie posiada wbudowanego odbiornika GPS. Poprzednio flaga `ENV_INCLUDE_GPS=1` była automatycznie dziedziczona z konfiguracji bazowych, tworząc uszkodzony ekran GPS, na którym teksty `"gps off"` oraz `"Can't access GPS"` nakładały się na siebie w tej samej linii (`y=8`), tworząc nieczytelne znaki `Gps ' df 1 cces`. Dodanie `-UENV_INCLUDE_GPS` i usunięcie nieużywanych pinów całkowicie wyeliminowało ten ekran z menu urządzenia.
 - **Wyświetlanie Losowego Kodu PIN Bluetooth na Pierwszym Ekranie**:
   - Usunięto nieużyteczny odczyt baterii z pierwszego ekranu (`FIRST`) i zastąpiono go losowym 6-cyfrowym kodem PIN Bluetooth (`PIN:%06d` na pozycji `y=23`, wyśrodkowany).
