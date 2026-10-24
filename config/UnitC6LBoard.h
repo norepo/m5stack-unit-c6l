@@ -12,6 +12,6 @@ public:
   }
 
   bool isExternalPowered() override {
-    return true;
+    return false;
   }
 };
