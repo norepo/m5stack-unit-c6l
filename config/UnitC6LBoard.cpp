@@ -120,9 +120,74 @@ SensorManager sensors;
 
 #ifdef DISPLAY_CLASS
   UnitC6LDisplay display(&spi);
-  #ifdef PIN_USER_BTN
-    MomentaryButton user_btn(PIN_USER_BTN, 1000, true, true);
-  #endif
+
+  class UnitC6LButton : public MomentaryButton {
+    unsigned long _down_at;
+    bool _prev_pressed;
+    bool _pending_click;
+    unsigned long _last_click_time;
+    uint8_t _click_count;
+
+  public:
+    UnitC6LButton() : MomentaryButton(9, 1000, true, true),
+      _down_at(0), _prev_pressed(false), _pending_click(false),
+      _last_click_time(0), _click_count(0) {}
+
+    void begin() override {
+      pinMode(9, INPUT_PULLUP);
+      pinMode(3, INPUT_PULLUP);
+    }
+
+    bool isPressed() const {
+      if (digitalRead(9) == LOW) return true;
+      static uint32_t lastCheck = 0;
+      static bool p0_down = false;
+      uint32_t now = millis();
+      if (now - lastCheck >= 20) {
+        lastCheck = now;
+        uint8_t sta = pi4io_read(PI4IO_REG_IN_STA);
+        p0_down = ((sta & 0x01) == 0);
+      }
+      return p0_down;
+    }
+
+    int check(bool repeat_click = false) override {
+      bool pressed = isPressed();
+      int event = BUTTON_EVENT_NONE;
+      uint32_t now = millis();
+
+      if (pressed != _prev_pressed) {
+        if (pressed) {
+          _down_at = now;
+        } else {
+          if (_down_at > 0 && (now - _down_at < 1000)) {
+            _click_count++;
+            _last_click_time = now;
+            _pending_click = true;
+          }
+          _down_at = 0;
+        }
+        _prev_pressed = pressed;
+      }
+
+      if (_down_at > 0 && (now - _down_at >= 1000)) {
+        event = BUTTON_EVENT_LONG_PRESS;
+        _down_at = 0;
+        _click_count = 0;
+        _pending_click = false;
+      } else if (_pending_click && (now - _last_click_time >= 280)) {
+        if (_click_count == 1) event = BUTTON_EVENT_CLICK;
+        else if (_click_count == 2) event = BUTTON_EVENT_DOUBLE_CLICK;
+        else if (_click_count >= 3) event = BUTTON_EVENT_TRIPLE_CLICK;
+        _click_count = 0;
+        _pending_click = false;
+      }
+      return event;
+    }
+  };
+
+  static UnitC6LButton _impl_user_btn;
+  MomentaryButton& user_btn = _impl_user_btn;
 #endif
 
 bool radio_init() {
