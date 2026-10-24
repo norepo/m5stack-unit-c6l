@@ -95,7 +95,7 @@ public:
   }
 
   void drawXbm(int x, int y, const uint8_t* bits, int w, int h) override {
-    display.drawBitmap(x, y, bits, w, h, _color);
+    display.drawXBitmap(x, y, bits, w, h, _color);
   }
 
   uint16_t getTextWidth(const char* str) override {

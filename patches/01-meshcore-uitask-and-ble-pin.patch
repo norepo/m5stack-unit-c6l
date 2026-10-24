@@ -1,5 +1,97 @@
+﻿diff --git a/examples/companion_radio/AbstractUITask.h b/examples/companion_radio/AbstractUITask.h
+index d927c1a3..94901dcb 100644
+--- a/examples/companion_radio/AbstractUITask.h
++++ b/examples/companion_radio/AbstractUITask.h
+@@ -33,11 +33,19 @@ protected:
+ 
+ public:
+   bool hasConnection() const { return _interfaceManager->isConnected(); }
++  bool isBluetoothConnected() const { return _interfaceManager->isBluetoothConnected(); }
+   uint16_t getBattMilliVolts() const { return _board->getBattMilliVolts(); }
+   bool isBluetoothEnabled() const { return _interfaceManager->isBluetoothEnabled(); }
+   void enableBluetooth() { _interfaceManager->enableBluetooth(); }
+   void disableBluetooth() { _interfaceManager->disableBluetooth(); }
+ 
++#ifdef ENABLE_WIFI_INTERFACE
++  bool isWiFiEnabled() const { return _interfaceManager->isWiFiEnabled(); }
++  bool isWiFiConnected() const { return _interfaceManager->isWiFiConnected(); }
++  void enableWiFi() { _interfaceManager->enableWiFi(); }
++  void disableWiFi() { _interfaceManager->disableWiFi(); }
++#endif
++
+   virtual void notify(UIEventType t = UIEventType::none) = 0;
+   virtual void loop() = 0;
+ };
+diff --git a/examples/companion_radio/MyMesh.cpp b/examples/companion_radio/MyMesh.cpp
+index f32ea67a..809e3462 100644
+--- a/examples/companion_radio/MyMesh.cpp
++++ b/examples/companion_radio/MyMesh.cpp
+@@ -2133,13 +2133,27 @@ bool MyMesh::handleCommand(const char* command, uint32_t sender_timestamp, char*
+   if (memcmp(command, "set wifi.ssid ", 14) == 0) {
+     StrHelper::strncpy(_prefs.wifi_ssid, &command[14], sizeof(_prefs.wifi_ssid));
+     savePrefs();
+-    sprintf(reply, "> wifi.ssid is now %s (set wifi.pwd too, then reboot)", _prefs.wifi_ssid);
++#if defined(ESP32)
++    if (_prefs.wifi_enabled && _prefs.wifi_ssid[0]) {
++      WiFi.mode(WIFI_STA);
++      WiFi.setAutoReconnect(true);
++      WiFi.begin(_prefs.wifi_ssid, _prefs.wifi_pwd);
++    }
++#endif
++    sprintf(reply, "> wifi.ssid is now %s", _prefs.wifi_ssid);
+     return true;
+   }
+   if (memcmp(command, "set wifi.pwd ", 13) == 0) {
+     StrHelper::strncpy(_prefs.wifi_pwd, &command[13], sizeof(_prefs.wifi_pwd));
+     savePrefs();
+-    strcpy(reply, "> wifi.pwd updated (reboot to apply)");
++#if defined(ESP32)
++    if (_prefs.wifi_enabled && _prefs.wifi_ssid[0]) {
++      WiFi.mode(WIFI_STA);
++      WiFi.setAutoReconnect(true);
++      WiFi.begin(_prefs.wifi_ssid, _prefs.wifi_pwd);
++    }
++#endif
++    strcpy(reply, "> wifi.pwd updated and connecting");
+     return true;
+   }
+   if (strcmp(command, "get wifi.pwd") == 0) {
+@@ -2150,7 +2164,11 @@ bool MyMesh::handleCommand(const char* command, uint32_t sender_timestamp, char*
+     _prefs.wifi_ssid[0] = 0;
+     _prefs.wifi_pwd[0] = 0;
+     savePrefs();
+-    strcpy(reply, "> wifi config cleared (reboot to apply)");
++#if defined(ESP32)
++    WiFi.disconnect(true);
++    WiFi.mode(WIFI_OFF);
++#endif
++    strcpy(reply, "> wifi config cleared");
+     return true;
+   }
+   if (strcmp(command, "get wifi.ssid") == 0) {
+@@ -2160,7 +2178,19 @@ bool MyMesh::handleCommand(const char* command, uint32_t sender_timestamp, char*
+   if (memcmp(command, "set wifi.enabled ", 17) == 0) {
+     _prefs.wifi_enabled = atoi(&command[17]) ? 1 : 0;
+     savePrefs();
+-    sprintf(reply, "> wifi.enabled is now %d (reboot to apply)", _prefs.wifi_enabled);
++#if defined(ESP32)
++    if (_prefs.wifi_enabled) {
++      if (_prefs.wifi_ssid[0]) {
++        WiFi.mode(WIFI_STA);
++        WiFi.setAutoReconnect(true);
++        WiFi.begin(_prefs.wifi_ssid, _prefs.wifi_pwd);
++      }
++    } else {
++      WiFi.disconnect(true);
++      WiFi.mode(WIFI_OFF);
++    }
++#endif
++    sprintf(reply, "> wifi.enabled is now %d", _prefs.wifi_enabled);
+     return true;
+   }
+   if (strcmp(command, "get wifi.enabled") == 0) {
 diff --git a/examples/companion_radio/main.cpp b/examples/companion_radio/main.cpp
-index 839d4958..418fed4c 100644
+index 839d4958..e30ff3ff 100644
 --- a/examples/companion_radio/main.cpp
 +++ b/examples/companion_radio/main.cpp
 @@ -187,7 +187,9 @@ void setup() {
@@ -13,8 +105,160 @@ index 839d4958..418fed4c 100644
      if (disp != NULL && BLE_PIN_CODE == 123456) {
        StdRNG rng;
        the_mesh.setBLEPin(rng.nextInt(100000, 999999)); // random pin each session
+@@ -219,38 +221,40 @@ void setup() {
+   }
+   // only start wifi if enabled and ssid is not empty
+   wifi_enabled = the_mesh.getNodePrefs()->wifi_enabled;
++
++#if defined(ESP32)
++  WiFi.setAutoReconnect(true);
++
++  WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info){
++      if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
++          WIFI_DEBUG_PRINTLN("WiFi disconnected (reason=%s). Flagging for reconnect...",
++            WiFi.disconnectReasonName((wifi_err_reason_t)info.wifi_sta_disconnected.reason));
++          wifi_needs_reconnect = true;
++      } else if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
++          WIFI_DEBUG_PRINTLN("WiFi connected successfully! IP: %s", WiFi.localIP().toString().c_str());
++          wifi_needs_reconnect = false;
++      }
++  });
++#endif
++
++  wifi_interface.begin(TCP_PORT);
++  interface_manager.addInterface(InterfaceType::WiFi, &wifi_interface);
++
+   if (wifi_enabled && wifi_ssid[0]) {
+ #if defined(ESP32)
+     board.setInhibitSleep(true);   // prevent sleep when WiFi is active
+-    WiFi.setAutoReconnect(true);
+-
+-    WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info){
+-        if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+-            WIFI_DEBUG_PRINTLN("WiFi disconnected (reason=%s). Flagging for reconnect...",
+-              WiFi.disconnectReasonName((wifi_err_reason_t)info.wifi_sta_disconnected.reason));
+-            wifi_needs_reconnect = true;
+-        } else if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
+-            WIFI_DEBUG_PRINTLN("WiFi connected successfully!");
+-            wifi_needs_reconnect = false;
+-        }
+-    });
+ #endif
+-
+     WIFI_DEBUG_PRINTLN("connecting to %s", wifi_ssid);
+ 
+ #if defined(RP2040_PLATFORM)
+-    // the join itself blocks inside the core (CYW43::begin busy-waits for the
+-    // association), so every attempt stalls the mesh loop. beginNoBlock() only skips the
+-    // extra DHCP wait. Give the first connect a full window, then bound the retries below.
+     WiFi.beginNoBlock(wifi_ssid, wifi_pwd);
+-    last_wifi_reconnect_attempt = millis();   // let DHCP finish before the poll can retry
++    last_wifi_reconnect_attempt = millis();
+ #else
+     WiFi.begin(wifi_ssid, wifi_pwd);
+ #endif
+-    wifi_interface.begin(TCP_PORT);
+-    interface_manager.addInterface(InterfaceType::WiFi, &wifi_interface);
+   } else {
+-    WIFI_DEBUG_PRINTLN("wifi disabled");
++    WiFi.mode(WIFI_OFF);
++    WIFI_DEBUG_PRINTLN("wifi disabled or ssid empty");
+   }
+ #endif
+ 
+diff --git a/examples/companion_radio/ui-tiny/ScrollingStatusBar.h b/examples/companion_radio/ui-tiny/ScrollingStatusBar.h
+index 9967489f..69156283 100644
+--- a/examples/companion_radio/ui-tiny/ScrollingStatusBar.h
++++ b/examples/companion_radio/ui-tiny/ScrollingStatusBar.h
+@@ -30,12 +30,19 @@ class ScrollingStatusBar {
+   bool _last_buzzer_quiet;
+   bool _last_gps_on;
+   bool _last_ble_on;
++#ifdef ENABLE_WIFI_INTERFACE
++  uint8_t _last_wifi_state;
++#endif
+ 
+ public:
+   ScrollingStatusBar() : _text_width(0), _scroll_x(0), _display_width(72),
+                           _next_scroll(0), _next_update(0), _needs_redraw(true),
+                           _last_batt_mv(0), _last_buzzer_quiet(false),
+-                          _last_gps_on(false), _last_ble_on(false) {
++                          _last_gps_on(false), _last_ble_on(false)
++#ifdef ENABLE_WIFI_INTERFACE
++                          , _last_wifi_state(0)
++#endif
++  {
+     _status[0] = 0;
+     _last_name[0] = 0;
+   }
+@@ -50,12 +57,19 @@ public:
+   // Call periodically to update the status string content.
+   // Only rebuilds if values have changed or update interval has elapsed.
+   void update(DisplayDriver& display, const char* node_name, uint16_t batt_millivolts,
+-              bool buzzer_quiet, bool gps_on, bool ble_on) {
++              bool buzzer_quiet, bool gps_on, bool ble_on
++#ifdef ENABLE_WIFI_INTERFACE
++              , uint8_t wifi_state = 0
++#endif
++  ) {
+ 
+     bool changed = (batt_millivolts != _last_batt_mv)
+                 || (buzzer_quiet != _last_buzzer_quiet)
+                 || (gps_on != _last_gps_on)
+                 || (ble_on != _last_ble_on)
++#ifdef ENABLE_WIFI_INTERFACE
++                || (wifi_state != _last_wifi_state)
++#endif
+                 || (strcmp(node_name, _last_name) != 0);
+ 
+     if (!changed) return;
+@@ -67,9 +81,13 @@ public:
+     _last_buzzer_quiet = buzzer_quiet;
+     _last_gps_on = gps_on;
+     _last_ble_on = ble_on;
++#ifdef ENABLE_WIFI_INTERFACE
++    _last_wifi_state = wifi_state;
++#endif
+ 
+     float volts = batt_millivolts / 1000.0f;
+ 
++    #if ENV_INCLUDE_GPS == 1
+     snprintf(_status, sizeof(_status),
+       "%s" STATUS_BAR_SEPARATOR
+       "%.2fV" STATUS_BAR_SEPARATOR
+@@ -83,6 +101,30 @@ public:
+       gps_on ? "ON" : "OFF",
+       ble_on ? "ON" : "OFF"
+     );
++    #elif defined(ENABLE_WIFI_INTERFACE)
++    const char* wifi_str = (wifi_state == 2) ? "CONN" : (wifi_state == 1 ? "ON" : "OFF");
++    snprintf(_status, sizeof(_status),
++      "%s" STATUS_BAR_SEPARATOR
++      "BUZ:%s" STATUS_BAR_SEPARATOR
++      "BLE:%s" STATUS_BAR_SEPARATOR
++      "WIFI:%s"
++      " - ",
++      node_name,
++      buzzer_quiet ? "OFF" : "ON",
++      ble_on ? "ON" : "OFF",
++      wifi_str
++    );
++    #else
++    snprintf(_status, sizeof(_status),
++      "%s" STATUS_BAR_SEPARATOR
++      "BUZ:%s" STATUS_BAR_SEPARATOR
++      "BLE:%s"
++      " - ",  // trailing gap before the text loops
++      node_name,
++      buzzer_quiet ? "OFF" : "ON",
++      ble_on ? "ON" : "OFF"
++    );
++    #endif
+ 
+     display.setTextSize(1);
+     _text_width = display.getTextWidth(_status);
 diff --git a/examples/companion_radio/ui-tiny/UITask.cpp b/examples/companion_radio/ui-tiny/UITask.cpp
-index 7b70f836..b8f487cf 100644
+index 7b70f836..195bba7e 100644
 --- a/examples/companion_radio/ui-tiny/UITask.cpp
 +++ b/examples/companion_radio/ui-tiny/UITask.cpp
 @@ -55,27 +55,27 @@ public:
@@ -38,10 +282,6 @@ index 7b70f836..b8f487cf 100644
 +      uint16_t websiteWidth = display.getTextWidth(website);
 +      display.setCursor((display.width() - websiteWidth) / 2, (display.height() <= 48) ? 10 : 9);
 +      display.print(website);
-+
-+      // version info
-+      display.setTextSize(1);
-+      display.drawTextCentered(display.width()/2, (display.height() <= 48) ? 21 : 18, _version_info);
  
 -    // meshcore website
 -    const char* website = "meshcore.io";
@@ -58,13 +298,27 @@ index 7b70f836..b8f487cf 100644
 -    display.setColor(UIColor::secondary_txt);
 -    display.setTextSize(1);
 -    display.drawTextCentered(display.width()/2, 27, FIRMWARE_BUILD_DATE);
++      // version info
++      display.setTextSize(1);
++      display.drawTextCentered(display.width()/2, (display.height() <= 48) ? 21 : 18, _version_info);
++
 +      display.setColor(UIColor::secondary_txt);
 +      display.setTextSize(1);
 +      display.drawTextCentered(display.width()/2, (display.height() <= 48) ? 32 : 27, FIRMWARE_BUILD_DATE);
      }
      return 1000;
    }
-@@ -154,47 +154,67 @@ public:
+@@ -93,6 +93,9 @@ class HomeScreen : public UIScreen {
+     RECENT,
+     RADIO,
+     BLUETOOTH,
++#ifdef ENABLE_WIFI_INTERFACE
++    WIFI,
++#endif
+     ADVERT,
+ #if ENV_INCLUDE_GPS == 1
+     GPS,
+@@ -154,47 +157,82 @@ public:
      char tmp[80];
  
      if (_page == HomePage::FIRST) {
@@ -76,17 +330,52 @@ index 7b70f836..b8f487cf 100644
 -      // display.setCursor(0, 0);
 -      // display.print(filtered_name);
 -
--
++      if (display.width() <= 64) {
++        display.setColor(UIColor::primary_txt);
++        display.setTextSize(1);
++        sprintf(tmp, "MSG: %d", _task->getMsgCount());
++        display.setCursor(2, 11);
++        display.print(tmp);
+ 
 -      display.setColor(UIColor::primary_txt);
 -      display.setTextSize(2);
 -      sprintf(tmp, "MSG: %d", _task->getMsgCount());
 -      display.setCursor(0, 10);
 -      display.print(tmp);
--
++        if (the_mesh.getBLEPin() != 0) {
++          sprintf(tmp, "PIN:%06d", the_mesh.getBLEPin());
++          display.drawTextCentered(display.width() / 2, 23, tmp);
++        }
+ 
 -      sprintf(tmp, "BATT: %.2fV", _task->getCachedBattMV() / 1000.0f);
 -      display.setCursor(0, 19);
 -      display.print(tmp);
--
++        #ifdef ENABLE_WIFI_INTERFACE
++          IPAddress ip = WiFi.localIP();
++          snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
++          display.drawTextCentered(display.width() / 2, 35, tmp);
++        #else
++          if (_task->isBluetoothConnected()) {
++            display.setColor(UIColor::warning_txt);
++            display.drawTextCentered(display.width() / 2, 35, "Connected");
++          } else if (!_task->isBluetoothEnabled()) {
++            display.setColor(UIColor::secondary_txt);
++            display.drawTextCentered(display.width() / 2, 35, "BLE: OFF");
++          } else if (_task->hasConnection()) {
++            display.setColor(UIColor::warning_txt);
++            display.drawTextCentered(display.width() / 2, 35, "USB Link");
++          } else {
++            display.setColor(UIColor::warning_txt);
++            display.drawTextCentered(display.width() / 2, 35, "BLE Ready");
++          }
++        #endif
++      } else {
++        display.setColor(UIColor::primary_txt);
++        display.setTextSize(2);
++        sprintf(tmp, "MSG: %d", _task->getMsgCount());
++        display.setCursor(0, 10);
++        display.print(tmp);
+ 
 -      #ifdef ENABLE_WIFI_INTERFACE
 -        IPAddress ip = WiFi.localIP();
 -        snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
@@ -95,63 +384,42 @@ index 7b70f836..b8f487cf 100644
 -      #endif
 -      if (_task->hasConnection()) {
 -        display.setColor(UIColor::warning_txt);
-+      if (display.width() <= 64) {
-+        display.setColor(UIColor::primary_txt);
-         display.setTextSize(1);
+-        display.setTextSize(1);
 -        display.drawTextCentered(display.width() / 2, display.height()-8, "< Connected >");
-+        sprintf(tmp, "MSG: %d", _task->getMsgCount());
-+        display.setCursor(2, 11);
-+        display.print(tmp);
++        if (the_mesh.getBLEPin() != 0) {
++          display.setColor(UIColor::warning_txt);
++          display.setTextSize(2);
++          sprintf(tmp, "Pin:%d", the_mesh.getBLEPin());
++          display.drawTextCentered(display.width() / 2, 28, tmp);
++        }
  
 -      } else if (the_mesh.getBLEPin() != 0) { // BT pin
 -        display.setColor(UIColor::warning_txt);
-+        sprintf(tmp, "BAT: %.2fV", _task->getCachedBattMV() / 1000.0f);
-+        display.setCursor(2, 22);
-+        display.print(tmp);
-+
-+        #ifdef ENABLE_WIFI_INTERFACE
-+          IPAddress ip = WiFi.localIP();
-+          snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-+          display.drawTextCentered(display.width() / 2, 35, tmp);
-+        #else
-+          if (_task->hasConnection()) {
-+            display.setColor(UIColor::warning_txt);
-+            display.drawTextCentered(display.width() / 2, 35, "Connected");
-+          } else if (the_mesh.getBLEPin() != 0) { // BT pin
-+            display.setColor(UIColor::warning_txt);
-+            sprintf(tmp, "PIN:%d", the_mesh.getBLEPin());
-+            display.drawTextCentered(display.width() / 2, 35, tmp);
-+          }
-+        #endif
-+      } else {
-+        display.setColor(UIColor::primary_txt);
-         display.setTextSize(2);
+-        display.setTextSize(2);
 -        sprintf(tmp, "Pin:%d", the_mesh.getBLEPin());
 -        display.drawTextCentered(display.width() / 2, display.height()-8, tmp);
-+        sprintf(tmp, "MSG: %d", _task->getMsgCount());
-+        display.setCursor(0, 10);
-+        display.print(tmp);
-+
-+        sprintf(tmp, "BATT: %.2fV", _task->getCachedBattMV() / 1000.0f);
-+        display.setCursor(0, 19);
-+        display.print(tmp);
-+
 +        #ifdef ENABLE_WIFI_INTERFACE
 +          IPAddress ip = WiFi.localIP();
 +          snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 +          display.setTextSize(1);
 +          display.drawTextCentered(display.width() / 2, 54, tmp);
 +        #endif
-+        if (_task->hasConnection()) {
++        if (_task->isBluetoothConnected()) {
 +          display.setColor(UIColor::warning_txt);
 +          display.setTextSize(1);
 +          display.drawTextCentered(display.width() / 2, display.height()-8, "< Connected >");
-+
-+        } else if (the_mesh.getBLEPin() != 0) { // BT pin
++        } else if (!_task->isBluetoothEnabled()) {
++          display.setColor(UIColor::secondary_txt);
++          display.setTextSize(1);
++          display.drawTextCentered(display.width() / 2, display.height()-8, "BLE: OFF");
++        } else if (_task->hasConnection()) {
 +          display.setColor(UIColor::warning_txt);
-+          display.setTextSize(2);
-+          sprintf(tmp, "Pin:%d", the_mesh.getBLEPin());
-+          display.drawTextCentered(display.width() / 2, display.height()-8, tmp);
++          display.setTextSize(1);
++          display.drawTextCentered(display.width() / 2, display.height()-8, "USB Link");
++        } else {
++          display.setColor(UIColor::warning_txt);
++          display.setTextSize(1);
++          display.drawTextCentered(display.width() / 2, display.height()-8, "BLE Ready");
 +        }
        }
      } else if (_page == HomePage::RECENT) {
@@ -166,7 +434,7 @@ index 7b70f836..b8f487cf 100644
          auto a = &recent[i];
          if (a->name[0] == 0) continue;  // empty slot
          int secs = _rtc->getCurrentTime() - a->recv_timestamp;
-@@ -218,35 +238,57 @@ public:
+@@ -218,24 +256,54 @@ public:
      } else if (_page == HomePage::RADIO) {
        display.setColor(UIColor::primary_txt);
        display.setTextSize(1);
@@ -189,24 +457,28 @@ index 7b70f836..b8f487cf 100644
 -      sprintf(tmp, "TX%d", _node_prefs->tx_power_dbm);
 -      display.drawTextRightAlign(display.width(), 26, tmp);
 +      if (display.width() <= 64) {
-+        display.setCursor(0, 10);
++        display.setCursor(0, 8);
 +        sprintf(tmp, "%.2f", _node_prefs->freq);
 +        display.print(tmp);
 +        sprintf(tmp, "SF%d", _node_prefs->sf);
-+        display.drawTextRightAlign(display.width(), 10, tmp);
++        display.drawTextRightAlign(display.width() - 1, 8, tmp);
 +
-+        display.setCursor(0, 19);
++        display.setCursor(0, 16);
 +        sprintf(tmp, "BW:%.0f", _node_prefs->bw);
 +        display.print(tmp);
 +        sprintf(tmp, "CR%d", _node_prefs->cr);
-+        display.drawTextRightAlign(display.width(), 19, tmp);
++        display.drawTextRightAlign(display.width() - 1, 16, tmp);
 +
-+        display.setCursor(0, 28);
++        display.setCursor(0, 24);
 +        sprintf(tmp, "TX:%ddBm", _node_prefs->tx_power_dbm);
 +        display.print(tmp);
 +
-+        display.setCursor(0, 37);
++        display.setCursor(0, 32);
 +        sprintf(tmp, "NF:%ddB", radio_driver.getNoiseFloor());
++        display.print(tmp);
++
++        display.setCursor(0, 40);
++        sprintf(tmp, "BAT:%.2fV", _task->getCachedBattMV() / 1000.0f);
 +        display.print(tmp);
 +      } else {
 +        // frequency and spreading factor
@@ -227,26 +499,132 @@ index 7b70f836..b8f487cf 100644
 +        display.print(tmp);
 +        sprintf(tmp, "TX%d", _node_prefs->tx_power_dbm);
 +        display.drawTextRightAlign(display.width(), 26, tmp);
++
++        display.setCursor(0, 35);
++        sprintf(tmp, "BAT: %.2fV", _task->getCachedBattMV() / 1000.0f);
++        display.print(tmp);
 +      }
  
      } else if (_page == HomePage::BLUETOOTH) {
        display.setColor(UIColor::corp_blue);
--      display.drawXbm((display.width() - 32) / 2, 8,
-+      display.drawXbm((display.width() - 32) / 2, (display.height() <= 48) ? 11 : 8,
+@@ -243,11 +311,72 @@ public:
            _task->isBluetoothEnabled() ? bluetooth_on : bluetooth_off,
            32, 32);
        display.setTextSize(1);
-       // display.drawTextCentered(display.width() / 2, 40 - 11, "toggle: " PRESS_LABEL);
+-      // display.drawTextCentered(display.width() / 2, 40 - 11, "toggle: " PRESS_LABEL);
++      if (!_task->isBluetoothEnabled()) {
++        display.setColor(UIColor::secondary_txt);
++        display.drawTextCentered(display.width() / 2, 40, "BLE: OFF");
++      } else if (_task->isBluetoothConnected()) {
++        display.setColor(UIColor::primary_txt);
++        display.drawTextCentered(display.width() / 2, 40, "Connected");
++      } else if (the_mesh.getBLEPin() != 0) {
++        display.setColor(UIColor::warning_txt);
++        sprintf(tmp, "PIN:%06d", the_mesh.getBLEPin());
++        display.drawTextCentered(display.width() / 2, 40, tmp);
++      } else {
++        display.setColor(UIColor::primary_txt);
++        display.drawTextCentered(display.width() / 2, 40, "BLE: ON");
++      }
++#ifdef ENABLE_WIFI_INTERFACE
++    } else if (_page == HomePage::WIFI) {
++      bool wifi_on_state = _task->isWiFiEnabled();
++      bool wifi_connected = _task->isWiFiConnected();
++      const char* ssid = _node_prefs->getWifiSSID();
++
++      if (wifi_connected) {
++        display.setColor(UIColor::primary_txt);
++        display.setTextSize(1);
++        display.drawTextCentered(display.width() / 2, 8, "WiFi: Connected");
++
++        display.setColor(UIColor::secondary_txt);
++        display.drawTextCentered(display.width() / 2, 18, ssid[0] ? ssid : "Connected");
++
++        IPAddress ip = WiFi.localIP();
++        display.setColor(UIColor::warning_txt);
++        if (display.width() <= 64) {
++          char ip_line1[24];
++          char ip_line2[24];
++          snprintf(ip_line1, sizeof(ip_line1), "%d.%d.", ip[0], ip[1]);
++          snprintf(ip_line2, sizeof(ip_line2), "%d.%d:5000", ip[2], ip[3]);
++          display.drawTextCentered(display.width() / 2, 28, ip_line1);
++          display.drawTextCentered(display.width() / 2, 38, ip_line2);
++        } else {
++          char ip_full[32];
++          snprintf(ip_full, sizeof(ip_full), "%d.%d.%d.%d:5000", ip[0], ip[1], ip[2], ip[3]);
++          display.drawTextCentered(display.width() / 2, 30, ip_full);
++        }
++      } else {
++        display.setColor(UIColor::corp_blue);
++        display.drawXbm((display.width() - 32) / 2, 8,
++            wifi_on_state ? wifi_on : wifi_off,
++            32, 32);
++        display.setTextSize(1);
++        if (!wifi_on_state) {
++          display.setColor(UIColor::secondary_txt);
++          display.drawTextCentered(display.width() / 2, 40, "WIFI: OFF");
++        } else if (!ssid[0]) {
++          display.setColor(UIColor::warning_txt);
++          display.drawTextCentered(display.width() / 2, 40, "No SSID");
++        } else {
++          display.setColor(UIColor::warning_txt);
++          display.drawTextCentered(display.width() / 2, 40, "Connecting");
++        }
++      }
++#endif
      } else if (_page == HomePage::ADVERT) {
        display.setColor(UIColor::corp_blue);
--      display.drawXbm((display.width() - 32) / 2, 8, advert_icon, 32, 32);
-+      display.drawXbm((display.width() - 32) / 2, (display.height() <= 48) ? 11 : 8, advert_icon, 32, 32);
-       // display.drawTextCentered(display.width() / 2, 40 - 11, "advert: " PRESS_LABEL);
+       display.drawXbm((display.width() - 32) / 2, 8, advert_icon, 32, 32);
+-      // display.drawTextCentered(display.width() / 2, 40 - 11, "advert: " PRESS_LABEL);
++      display.setColor(UIColor::primary_txt);
++      display.setTextSize(1);
++      display.drawTextCentered(display.width() / 2, 40, "HOLD: SEND");
  #if ENV_INCLUDE_GPS == 1
      } else if (_page == HomePage::GPS) {
-@@ -704,12 +746,14 @@ void UITask::loop() {
+       LocationProvider* nmea = sensors.getLocationProvider();
+@@ -369,10 +498,12 @@ public:
+       display.setColor(UIColor::secondary_txt);
+       display.setTextSize(1);
+       if (_shutdown_init) {
+-        display.drawTextCentered(display.width() / 2, 20, "hibernating...");
++        display.drawTextCentered(display.width() / 2, 20, "Turning off...");
+       } else {
+         display.drawXbm((display.width() - 32) / 2, 8, power_icon, 32, 32);
+-        // display.drawTextCentered(display.width() / 2, 40 - 11, "hibernate:" PRESS_LABEL);
++        display.setColor(UIColor::primary_txt);
++        display.setTextSize(1);
++        display.drawTextCentered(display.width() / 2, 40, "HOLD: OFF");
+       }
+     }
+     return 5000;   // next render after 5000 ms
+@@ -398,6 +529,17 @@ public:
+       }
+       return true;
+     }
++#ifdef ENABLE_WIFI_INTERFACE
++    if (c == KEY_ENTER && _page == HomePage::WIFI) {
++      _task->toggleWiFi();
++      if (_task->isWiFiEnabled()) {
++        _task->showAlert("WiFi ON", 800);
++      } else {
++        _task->showAlert("WiFi OFF", 800);
++      }
++      return true;
++    }
++#endif
+     if (c == KEY_ENTER && _page == HomePage::ADVERT) {
+       _task->notify(UIEventType::ack);
+       if (the_mesh.advert()) {
+@@ -702,14 +844,20 @@ void UITask::loop() {
+         _cached_batt_mv,
+         isBuzzerQuiet(),
          getGPSState(),
-         isBluetoothEnabled());
+-        isBluetoothEnabled());
++        isBluetoothEnabled()
++#ifdef ENABLE_WIFI_INTERFACE
++        , isWiFiConnected() ? 2 : (isWiFiEnabled() ? 1 : 0)
++#endif
++        );
  
 -    bool status_dirty = _statusBar.needsRedraw();
 +    bool status_dirty = (curr != splash) && _statusBar.needsRedraw();
@@ -261,3 +639,176 @@ index 7b70f836..b8f487cf 100644
  
        if (curr) {
          int delay_millis = curr->render(*_display);
+@@ -864,3 +1012,35 @@ void UITask::toggleBuzzer() {
+     _next_refresh = 0;  // trigger refresh
+   #endif
+ }
++
++#ifdef ENABLE_WIFI_INTERFACE
++bool UITask::isWiFiEnabled() const {
++  return _node_prefs ? _node_prefs->wifi_enabled : false;
++}
++
++bool UITask::isWiFiConnected() const {
++  return (WiFi.status() == WL_CONNECTED);
++}
++
++void UITask::toggleWiFi() {
++  if (!_node_prefs) return;
++  bool new_state = !_node_prefs->wifi_enabled;
++  _node_prefs->wifi_enabled = new_state ? 1 : 0;
++  the_mesh.savePrefs();
++
++  if (new_state) {
++    const char* ssid = _node_prefs->getWifiSSID();
++    if (ssid[0]) {
++      WiFi.mode(WIFI_STA);
++      WiFi.setAutoReconnect(true);
++      WiFi.begin(ssid, _node_prefs->wifi_pwd);
++    }
++    enableWiFi();
++  } else {
++    WiFi.disconnect(true);
++    WiFi.mode(WIFI_OFF);
++    disableWiFi();
++  }
++  _next_refresh = 0;
++}
++#endif
+diff --git a/examples/companion_radio/ui-tiny/UITask.h b/examples/companion_radio/ui-tiny/UITask.h
+index 084919aa..899b103f 100644
+--- a/examples/companion_radio/ui-tiny/UITask.h
++++ b/examples/companion_radio/ui-tiny/UITask.h
+@@ -98,6 +98,12 @@ public:
+   bool getGPSState();
+   void toggleGPS();
+ 
++#ifdef ENABLE_WIFI_INTERFACE
++  bool isWiFiEnabled() const;
++  bool isWiFiConnected() const;
++  void toggleWiFi();
++#endif
++
+   // MyMesh::Listener
+   void onMessageRecv(mesh::Packet *pkt, const ContactInfo &from, uint8_t txt_type, uint32_t sender_timestamp, const char* text) override;
+   void onChannelMessageRecv(mesh::Packet *pkt, ChannelDetails& channel_details, const char* text) override;
+diff --git a/examples/companion_radio/ui-tiny/u8g2_icons.h b/examples/companion_radio/ui-tiny/u8g2_icons.h
+index ec5ac21c..dc5ea317 100644
+--- a/examples/companion_radio/ui-tiny/u8g2_icons.h
++++ b/examples/companion_radio/ui-tiny/u8g2_icons.h
+@@ -101,4 +101,42 @@ static const uint8_t advert_icon[] = {
+ 
+ // 'muted, 8x8px, horizontal
+ static const uint8_t muted_icon[] = {
+-  0x20, 0x6a, 0xea, 0xe4, 0xe4, 0xea, 0x6a, 0x20 };
+\ No newline at end of file
++  0x20, 0x6a, 0xea, 0xe4, 0xe4, 0xea, 0x6a, 0x20 };
++
++// wifi_on, 32x32px, horizontal, XBM LSB-first
++static const uint8_t wifi_on[] = {
++   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++   0x00, 0xfc, 0x3f, 0x00, 0x80, 0xff, 0xff, 0x01,
++   0xe0, 0x0f, 0xf0, 0x07, 0xf0, 0x01, 0x80, 0x0f,
++   0x78, 0x00, 0x00, 0x1e, 0x3c, 0x00, 0x00, 0x3c,
++   0x0e, 0xf8, 0x1f, 0x70, 0x04, 0xfe, 0x7f, 0x20,
++   0x80, 0x1f, 0xf8, 0x01, 0xc0, 0x03, 0xc0, 0x03,
++   0xe0, 0x01, 0x80, 0x07, 0xc0, 0x00, 0x00, 0x03,
++   0x00, 0xf0, 0x0f, 0x00, 0x00, 0xf8, 0x1f, 0x00,
++   0x00, 0x3c, 0x3c, 0x00, 0x00, 0x08, 0x10, 0x00,
++   0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x01, 0x00,
++   0x00, 0xc0, 0x03, 0x00, 0x00, 0xc0, 0x03, 0x00,
++   0x00, 0xc0, 0x03, 0x00, 0x00, 0x80, 0x01, 0x00,
++   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
++
++// wifi_off, 32x32px, horizontal, XBM LSB-first
++static const uint8_t wifi_off[] = {
++   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++   0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00,
++   0x30, 0x00, 0x00, 0x00, 0x70, 0x00, 0x00, 0x00,
++   0xe0, 0x00, 0x00, 0x00, 0xc0, 0x01, 0x00, 0x00,
++   0x80, 0xff, 0x3f, 0x00, 0x80, 0xff, 0xff, 0x01,
++   0xe0, 0x0f, 0xf0, 0x07, 0xf0, 0x1d, 0x80, 0x0f,
++   0x78, 0x38, 0x00, 0x1e, 0x3c, 0x70, 0x00, 0x3c,
++   0x0e, 0xf8, 0x1f, 0x70, 0x04, 0xfe, 0x7f, 0x20,
++   0x80, 0x9f, 0xfb, 0x01, 0xc0, 0x03, 0xc7, 0x03,
++   0xe0, 0x01, 0x8e, 0x07, 0xc0, 0x00, 0x1c, 0x03,
++   0x00, 0xf0, 0x3f, 0x00, 0x00, 0xf8, 0x7f, 0x00,
++   0x00, 0x3c, 0xfc, 0x00, 0x00, 0x08, 0xd0, 0x01,
++   0x00, 0x00, 0x80, 0x03, 0x00, 0x80, 0x01, 0x07,
++   0x00, 0xc0, 0x03, 0x0e, 0x00, 0xc0, 0x03, 0x0c,
++   0x00, 0xc0, 0x03, 0x08, 0x00, 0x80, 0x01, 0x00,
++   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+\ No newline at end of file
+diff --git a/src/helpers/ArduinoSerialInterface.cpp b/src/helpers/ArduinoSerialInterface.cpp
+index a01fa586..e9054f72 100644
+--- a/src/helpers/ArduinoSerialInterface.cpp
++++ b/src/helpers/ArduinoSerialInterface.cpp
+@@ -14,7 +14,11 @@ void ArduinoSerialInterface::disable() {
+ }
+ 
+ bool ArduinoSerialInterface::isConnected() const { 
++#if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
++  return (bool)Serial;
++#else
+   return true;   // no way of knowing, so assume yes
++#endif
+ }
+ 
+ bool ArduinoSerialInterface::isWriteBusy() const {
+diff --git a/src/helpers/MultiSerialInterface.h b/src/helpers/MultiSerialInterface.h
+index f7742b24..ac32397e 100644
+--- a/src/helpers/MultiSerialInterface.h
++++ b/src/helpers/MultiSerialInterface.h
+@@ -90,6 +90,49 @@ public:
+     return false; 
+   }
+ 
++  bool isBluetoothConnected() {
++    for(auto iface : _interfaces){
++      if(iface.instance && iface.type == InterfaceType::Bluetooth){
++        return iface.instance->isConnected();
++      }
++    }
++    return false;
++  }
++
++  void enableWiFi() {
++    for(auto iface : _interfaces){
++      if(iface.instance && iface.type == InterfaceType::WiFi){
++        iface.instance->enable();
++      }
++    }
++  }
++
++  void disableWiFi() {
++    for(auto iface : _interfaces){
++      if(iface.instance && iface.type == InterfaceType::WiFi){
++        iface.instance->disable();
++      }
++    }
++  }
++
++  bool isWiFiEnabled() {
++    for(auto iface : _interfaces){
++      if(iface.instance && iface.type == InterfaceType::WiFi){
++        return iface.instance->isEnabled();
++      }
++    }
++    return false;
++  }
++
++  bool isWiFiConnected() {
++    for(auto iface : _interfaces){
++      if(iface.instance && iface.type == InterfaceType::WiFi){
++        return iface.instance->isConnected();
++      }
++    }
++    return false;
++  }
++
+   // enable all interfaces
+   void enable() override {
+     _enabled = true;
