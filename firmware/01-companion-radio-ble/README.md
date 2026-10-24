@@ -7,7 +7,7 @@ Firmware role for **M5Stack Unit C6L** that connects over Bluetooth Low Energy (
 - **Firmware Size**: ~1,500 KB
 - **RAM Usage**: 50.3% (164.8 KB / 328 KB)
 - **Flash Usage**: 74.8% (1,470 KB / 1,966 KB)
-- **Bluetooth PIN**: `123456`
+- **Bluetooth PIN**: Random 6-digit PIN on boot (displayed on screen)
 - **Flash Mode**: `DIO` (80 MHz)
 
 ## Files
@@ -47,14 +47,18 @@ python esptool.py --chip esp32c6 --baud 921600 write_flash 0x0 bootloader.bin 0x
 ## Changelog & Hardware Fixes
 
 ### Latest Release Fixes
+- **Correct XBM Rendering (`drawXBitmap`)**: Switched `UnitC6LDisplay::drawXbm` to use `drawXBitmap` instead of `drawBitmap`. XBM files store pixel data LSB-first. Using MSB-first `drawBitmap` caused every 8-pixel byte to be mirrored horizontally, resulting in a backwards MeshCore splash logo, an inverted "fish-like" Bluetooth icon, inverted advert waves `)X(`, and an unrecognizable power button. All icons and splash logo are now crisp, upright, and non-mirrored.
+- **Action Labels on Icon Screens**: Added intuitive text prompts directly below the 32x32 icons:
+  - `BLUETOOTH`: Displays `PIN: <random>` when waiting for pairing, `Connected` when paired, or `BLE: OFF` when disabled.
+  - `ADVERT`: Displays `HOLD: SEND` below the broadcast antenna icon.
+  - `SHUTDOWN`: Displays `HOLD: OFF` below the standard IEC Power icon, and updates to `Turning off...` while initiating shutdown.
+- **Dynamic Random BLE PIN**: Removed static PIN override so the device generates a fresh 6-digit random PIN each session via `StdRNG` (between `100000` and `999999`), clearly shown on both the main screen (`FIRST`) and the `BLUETOOTH` screen for secure, straightforward pairing without hardcoded credentials.
 - **OLED Text Wrap & Overwrite Fix**: Disabled text wrap (`display.setTextWrap(false)`) in `UnitC6LDisplay.h`. Adafruit_GFX defaults to `wrap = true`, which caused the 58-character scrolling status bar (`PL-test-m5stack-c6l | 0.00V | ...`) to wrap 6 times down the entire height of the 64x48 OLED every frame, overwriting all screens and tricking `getTextBounds` into thinking the text was static. Text now cleanly scrolls along line 0 (`y = 0..7`) without touching lower rows.
 - **64x48 OLED UI Layout Optimization**: Adapted `ui-tiny/UITask.cpp` for the compact 64x48 screen:
   - `FIRST` page: Changed `setTextSize(2)` to `setTextSize(1)` so `MSG: %d`, `BAT: %.2fV`, and `PIN: %d` (or `Connected`) fit within the 64-pixel width without clipping or vertical collisions.
   - `RADIO` page: Reorganized frequency, SF, bandwidth, CR, power, and noise floor into 4 clean lines without horizontal character overlap.
   - `RECENT` page: Scaled vertical line pitch (`y += 9`) so up to 4 recent contact adverts fit cleanly between y=10 and y=44.
-  - `BLUETOOTH`, `ADVERT`, `SHUTDOWN` pages: Vertically centered 32x32 icons at `y = 11` directly below the scrolling status bar.
 - **Splash Screen Isolation**: Excluded status bar rendering while `SplashScreen` is active (`curr == splash`), allowing the MeshCore logo (centered) and build date to display cleanly on boot.
-- **Static BLE PIN `123456`**: Enabled `-D STATIC_BLE_PIN=1`. Prevents random PIN generation on boot, allowing straightforward, predictable pairing with PIN `123456`.
 - **Simultaneous USB + BLE Support**: Enabled `-D ENABLE_USB_INTERFACE` in the BLE environment. Both USB cable connection (Web Serial on https://app.meshcore.nz/) and Bluetooth work simultaneously.
 - **Dual-Button Navigation & Wake**: Added `UnitC6LButton` to read both the front button (`P0` on PI4IO expander) and the side button (`GPIO 9` BOOT). Pressing either button wakes the screen from sleep and cycles menu pages.
 - **OLED USB Power Retention**: Added `-D KEEP_DISPLAY_ON_USB=1` and overridden `isExternalPowered() = true`, preventing the 15-second display auto-off when powered over USB.
