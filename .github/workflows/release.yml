@@ -1,0 +1,39 @@
+name: Publish GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release Tag (e.g. v1.18.0-20261025)'
+        required: true
+
+jobs:
+  release:
+    name: Package and Publish Release
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Package Firmware Bundles
+        shell: pwsh
+        run: |
+          $tag = if ('${{ github.ref_type }}' -eq 'tag') { '${{ github.ref_name }}' } else { '${{ github.event.inputs.tag }}' }
+          if (-not $tag) { $tag = Get-Date -Format "v1.18.0-yyyyMMdd" }
+          .\scripts\package-release.ps1 -Tag $tag
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MeshCore 1.18 — Release ${{ github.ref_name || github.event.inputs.tag }}
+          files: |
+            releases/*.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false

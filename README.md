@@ -35,7 +35,9 @@ m5stack-unit-c6l/
 │   ├── flash-repeater.bat / .ps1        # Standard flash Repeater
 │   ├── flash-repeater-clean.bat         # Clean flash Repeater (wipes SPIFFS & old data)
 │   ├── erase-flash.bat / .ps1           # Full chip flash erase tool
-│   └── monitor-serial.bat               # 115200 baud serial log monitor
+│   ├── monitor-serial.bat               # 115200 baud serial log monitor
+│   ├── package-release.bat / .ps1       # Package standalone ZIP release bundles
+│   └── publish-github-release.ps1       # Automated GitHub Release publisher
 ├── config/
 │   ├── platformio.ini                   # Build environment configuration
 │   ├── target.h                         # Target definition & radio driver bindings
@@ -136,7 +138,9 @@ m5stack-unit-c6l/
 │   ├── flash-repeater.bat / .ps1        # Standardowe wgrywanie przekaźnika
 │   ├── flash-repeater-clean.bat         # Czyste wgrywanie przekaźnika (usuwa stary SPIFFS)
 │   ├── erase-flash.bat / .ps1           # Narzędzie pełnego czyszczenia pamięci Flash
-│   └── monitor-serial.bat               # Monitor logów szeregowych (115200 baud)
+│   ├── monitor-serial.bat               # Monitor logów szeregowych (115200 baud)
+│   ├── package-release.bat / .ps1       # Tworzenie paczek wydań ZIP do pobrania
+│   └── publish-github-release.ps1       # Automatyczna publikacja wydań na GitHubie
 ├── config/
 │   ├── platformio.ini                   # Konfiguracja środowiska kompilacji
 │   ├── target.h                         # Definicje sprzętowe i sterownik radia
