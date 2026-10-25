@@ -48,9 +48,10 @@ python esptool.py --chip esp32c6 --baud 921600 write_flash 0x0 bootloader.bin 0x
 ### Features & Hardware Integration
 - **Zero-UI & Headless**: No display rendering or Bluetooth overhead; uses only ~30 KB RAM (~9%), leaving abundant memory for neighbor tables and packet routing.
 - **Autonomous LoRa Routing**: Listens and retransmits packets across the mesh network without requiring a phone or computer connection.
-- **SX1262 LDO Regulator Mode**: Configured with `-D SX126X_USE_REGULATOR_LDO=true` matching the Stamp C6LoRa power topology.
+- **SX1262 LDO Regulator Mode & Safe Power Default**: Configured with `-D SX126X_USE_REGULATOR_LDO=true` matching the Stamp C6LoRa power topology, defaulting to 20 dBm TX power to eliminate USB brownout resets (configurable up to 22 dBm via `set radio.txpower 22`).
 - **PI4IO Expander Control**: Automates active antenna switching (`P6`) and LNA enable (`P5`).
 - **Audible Startup & LED Alert**: Emits a startup tone on buzzer (`GPIO 11`) and monitors radio initialization status on the RGB LED (`GPIO 2`).
+- **Serial Boot Diagnostics**: Automatically prints hardware reset reason (`esp_reset_reason()`) and available free heap over Serial at 115200 baud upon every restart.
 - **Diagnostics & Troubleshooting**: Full guide on boot reset reasons, antenna matching, and serial logging in [TROUBLESHOOTING.md](../../docs/TROUBLESHOOTING.md).
 
 ---
@@ -99,7 +100,8 @@ python esptool.py --chip esp32c6 --baud 921600 write_flash 0x0 bootloader.bin 0x
 ### Funkcje i Integracja Sprzętowa
 - **Tryb Headless (Bez interfejsu graficznego)**: Brak obciążenia wyświetlaniem i stosem Bluetooth; oprogramowanie zużywa jedynie ~30 KB RAM (~9%), pozostawiając maksimum pamięci na tablice routingu i buforowanie pakietów.
 - **Autonomiczny Routing LoRa**: Automatycznie odbiera i retransmituje pakiety w sieci mesh, rozszerzając zasięg sieci bez udziału telefonu.
-- **Tryb Regulatora LDO SX1262**: Włączono flagę `-D SX126X_USE_REGULATOR_LDO=true`, zapewniając stabilne zasilanie toru radiowego SX1262.
+- **Tryb Regulatora LDO SX1262 i Bezpieczna Moc Domyślna**: Włączono flagę `-D SX126X_USE_REGULATOR_LDO=true`, zapewniając stabilne zasilanie toru radiowego SX1262, z domyślną mocą 20 dBm eliminującą ryzyko spadków napięcia (możliwość zmiany na 22 dBm komendą `set radio.txpower 22`).
 - **Sterowanie Ekspanderem PI4IO**: Automatyczne przełączanie toru anteny (`P6`) oraz zasilania wzmacniacza LNA (`P5`).
 - **Sygnalizacja Dźwiękowa i Dioda LED**: Odtwarza sygnał startowy na brzęczyku (`GPIO 11`) oraz sygnalizuje stan inicjalizacji radia diodą RGB (`GPIO 2`).
+- **Diagnostyka Startowa na Porcie Szeregowym**: Automatycznie wypisuje przyczynę restartu (`esp_reset_reason()`) oraz ilość wolnej pamięci RAM (heap) na porcie szeregowym 115200 baud po każdym restarcie.
 - **Diagnostyka i Rozwiązywanie Problemów**: Pełny poradnik dotyczący przyczyn restartów, anten i logowania w [TROUBLESHOOTING.md](../../docs/TROUBLESHOOTING.md).
