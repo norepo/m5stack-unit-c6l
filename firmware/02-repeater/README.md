@@ -51,6 +51,7 @@ python esptool.py --chip esp32c6 --baud 921600 write_flash 0x0 bootloader.bin 0x
 - **SX1262 LDO Regulator Mode**: Configured with `-D SX126X_USE_REGULATOR_LDO=true` matching the Stamp C6LoRa power topology.
 - **PI4IO Expander Control**: Automates active antenna switching (`P6`) and LNA enable (`P5`).
 - **Audible Startup & LED Alert**: Emits a startup tone on buzzer (`GPIO 11`) and monitors radio initialization status on the RGB LED (`GPIO 2`).
+- **Diagnostics & Troubleshooting**: Full guide on boot reset reasons, antenna matching, and serial logging in [TROUBLESHOOTING.md](../../docs/TROUBLESHOOTING.md).
 
 ---
 
@@ -101,3 +102,4 @@ python esptool.py --chip esp32c6 --baud 921600 write_flash 0x0 bootloader.bin 0x
 - **Tryb Regulatora LDO SX1262**: Włączono flagę `-D SX126X_USE_REGULATOR_LDO=true`, zapewniając stabilne zasilanie toru radiowego SX1262.
 - **Sterowanie Ekspanderem PI4IO**: Automatyczne przełączanie toru anteny (`P6`) oraz zasilania wzmacniacza LNA (`P5`).
 - **Sygnalizacja Dźwiękowa i Dioda LED**: Odtwarza sygnał startowy na brzęczyku (`GPIO 11`) oraz sygnalizuje stan inicjalizacji radia diodą RGB (`GPIO 2`).
+- **Diagnostyka i Rozwiązywanie Problemów**: Pełny poradnik dotyczący przyczyn restartów, anten i logowania w [TROUBLESHOOTING.md](../../docs/TROUBLESHOOTING.md).

@@ -46,7 +46,8 @@ m5stack-unit-c6l/
 │   └── 01-meshcore-uitask-and-ble-pin.patch # Upstream MeshCore source patch
 └── docs/
     ├── hardware-pinout.md               # Complete GPIO & schematic pinout
-    └── dual-boot-ota.md                 # Dual-boot slot switching guide
+    ├── dual-boot-ota.md                 # Dual-boot slot switching guide
+    └── TROUBLESHOOTING.md               # Diagnostics, antenna, brownout & release guide
 ```
 
 ### Firmware Roles
@@ -146,7 +147,8 @@ m5stack-unit-c6l/
 │   └── 01-meshcore-uitask-and-ble-pin.patch # Łatka z kodem źródłowym MeshCore
 └── docs/
     ├── hardware-pinout.md               # Pełna rozpiska wyprowadzeń GPIO i schematów
-    └── dual-boot-ota.md                 # Poradnik konfiguracji Dual-Boot
+    ├── dual-boot-ota.md                 # Poradnik konfiguracji Dual-Boot
+    └── TROUBLESHOOTING.md               # Diagnostyka restartów, anteny i wersjonowanie
 ```
 
 ### Role Oprogramowania
