@@ -14,7 +14,7 @@ if (-not $Tag) {
 }
 
 if (-not $Title) {
-    $Title = "MeshCore 1.18 — Release $Tag"
+    $Title = "MeshCore 1.18 - Release $Tag"
 }
 
 # Run packaging script first
@@ -28,16 +28,17 @@ if (-not (Test-Path $companionZip) -or -not (Test-Path $repeaterZip)) {
     Write-Error "Release archives could not be found."
 }
 
+$notesFile = Join-Path $env:TEMP "release_notes_$Tag.md"
 if (-not $Notes) {
-    $Notes = @"
+    @"
 ## MeshCore 1.18 Firmware Release ($Tag)
 
 Precompiled binaries and standalone flashing packages for **M5Stack Unit C6L** (ESP32-C6 + SX1262 LoRa).
 
-### Included Bundles / Dołączone Paczki
+### Included Bundles / Dolaczone Paczki
 1. **Companion Radio (BLE + Wi-Fi)**:
    - Dynamic 6-digit random PIN pairing on OLED line 2.
-   - 15s display auto-off with button wake & silent connection mode.
+   - 15s display auto-off with button wake and silent connection mode.
    - Flash partition: `huge_app.csv` (3.0 MB).
 2. **Repeater (Relay)**:
    - Zero-UI headless packet relay (~30 KB RAM usage).
@@ -47,10 +48,14 @@ Precompiled binaries and standalone flashing packages for **M5Stack Unit C6L** (
 
 ### Quick Start / Szybki Start
 Download the ZIP corresponding to your role, unzip, and double-click `flash-companion.bat` or `flash-repeater.bat`. No PlatformIO or Python installation required!
-"@
+"@ | Set-Content -Path $notesFile -Encoding UTF8
+} else {
+    $Notes | Set-Content -Path $notesFile -Encoding UTF8
 }
 
 Write-Host "Publishing GitHub Release: $Tag..." -ForegroundColor Cyan
-gh release create $Tag $companionZip $repeaterZip --title "$Title" --notes "$Notes"
+gh release create $Tag $companionZip $repeaterZip --title "$Title" --notes-file "$notesFile"
+
+if (Test-Path $notesFile) { Remove-Item -Force $notesFile }
 
 Write-Host "[SUCCESS] GitHub Release published successfully: $Tag" -ForegroundColor Green
