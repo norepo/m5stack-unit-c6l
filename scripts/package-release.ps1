@@ -65,4 +65,27 @@ Remove-Item -Recurse -Force $repeaterTempDir
 
 Write-Host "[OK] Created Repeater release bundle: $repeaterZipPath" -ForegroundColor Green
 
-Get-Item $companionZipPath, $repeaterZipPath | Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize
+# Package Repeater + Observer (4x MQTT)
+$observerZipName = "m5stack-unit-c6l-observer-$Tag.zip"
+$observerZipPath = Join-Path $releasesDir $observerZipName
+$observerTempDir = Join-Path $env:TEMP "meshcore-observer-$Tag"
+
+if (Test-Path $observerTempDir) { Remove-Item -Recurse -Force $observerTempDir }
+New-Item -ItemType Directory -Path $observerTempDir | Out-Null
+
+Copy-Item "$repoRoot\firmware\03-repeater-observer\*" $observerTempDir -Force
+Copy-Item "$repoRoot\scripts\flash-observer.bat" $observerTempDir -Force
+Copy-Item "$repoRoot\scripts\flash-observer.ps1" $observerTempDir -Force
+Copy-Item "$repoRoot\scripts\flash-observer-clean.bat" $observerTempDir -Force
+Copy-Item "$repoRoot\scripts\erase-flash.bat" $observerTempDir -Force
+Copy-Item "$repoRoot\scripts\erase-flash.ps1" $observerTempDir -Force
+Copy-Item "$repoRoot\scripts\monitor-serial.bat" $observerTempDir -Force
+Copy-Item "$repoRoot\docs\TROUBLESHOOTING.md" $observerTempDir -Force
+
+if (Test-Path $observerZipPath) { Remove-Item -Force $observerZipPath }
+Compress-Archive -Path "$observerTempDir\*" -DestinationPath $observerZipPath -CompressionLevel Optimal
+Remove-Item -Recurse -Force $observerTempDir
+
+Write-Host "[OK] Created Observer release bundle: $observerZipPath" -ForegroundColor Green
+
+Get-Item $companionZipPath, $repeaterZipPath, $observerZipPath | Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize
