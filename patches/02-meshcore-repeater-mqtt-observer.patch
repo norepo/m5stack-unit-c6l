@@ -1,0 +1,116 @@
+diff --git a/examples/simple_repeater/MyMesh.cpp b/examples/simple_repeater/MyMesh.cpp
+index 5293eed0..e8a65608 100644
+--- a/examples/simple_repeater/MyMesh.cpp
++++ b/examples/simple_repeater/MyMesh.cpp
+@@ -1,4 +1,8 @@
+ #include "MyMesh.h"
++
++#if defined(ENABLE_MQTT_OBSERVER)
++MqttObserverManager mqtt_observer;
++#endif
+ #include <algorithm>
+ 
+ /* ------------------------------ Config -------------------------------- */
+@@ -480,6 +484,9 @@ void MyMesh::logRxRaw(float snr, float rssi, const uint8_t raw[], int len) {
+ 
+ void MyMesh::logRx(mesh::Packet *pkt, int len, float score) {
+ #ifdef WITH_BRIDGE
++#if defined(ENABLE_MQTT_OBSERVER)
++  mqtt_observer.onPacketReceived(pkt, len, score, _radio->getLastSNR(), _radio->getLastRSSI());
++#endif
+   if (_prefs.bridge_pkt_src == 1) {
+     bridge.sendPacket(pkt);
+   }
+@@ -506,6 +513,9 @@ void MyMesh::logRx(mesh::Packet *pkt, int len, float score) {
+ 
+ void MyMesh::logTx(mesh::Packet *pkt, int len) {
+ #ifdef WITH_BRIDGE
++#if defined(ENABLE_MQTT_OBSERVER)
++  mqtt_observer.onPacketTransmitted(pkt, len);
++#endif
+   if (_prefs.bridge_pkt_src == 0) {
+     bridge.sendPacket(pkt);
+   }
+@@ -1211,6 +1221,11 @@ void MyMesh::clearStats() {
+ }
+ 
+ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply) {
++#if defined(ENABLE_MQTT_OBSERVER)
++  if (mqtt_observer.handleCommand(command, reply)) {
++    return;
++  }
++#endif
+   if (region_load_active) {
+     if (StrHelper::isBlank(command)) {  // empty/blank line, signal to terminate 'load' operation
+       region_map = temp_map;  // copy over the temp instance as new current map
+@@ -1302,6 +1317,9 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
+ }
+ 
+ void MyMesh::loop() {
++#if defined(ENABLE_MQTT_OBSERVER)
++  mqtt_observer.loop();
++#endif
+ #ifdef WITH_BRIDGE
+   bridge.loop();
+ #endif
+diff --git a/examples/simple_repeater/MyMesh.h b/examples/simple_repeater/MyMesh.h
+index dc893258..0051ab15 100644
+--- a/examples/simple_repeater/MyMesh.h
++++ b/examples/simple_repeater/MyMesh.h
+@@ -37,6 +37,11 @@
+ #include <helpers/RoutingPolicy.h>
+ #include "RateLimiter.h"
+ 
++#if defined(ENABLE_MQTT_OBSERVER)
++#include <helpers/wifi/MqttObserverManager.h>
++extern MqttObserverManager mqtt_observer;
++#endif
++
+ #ifdef WITH_BRIDGE
+ extern AbstractBridge* bridge;
+ #endif
+diff --git a/examples/simple_repeater/main.cpp b/examples/simple_repeater/main.cpp
+index 456aa8bf..cfa244bc 100644
+--- a/examples/simple_repeater/main.cpp
++++ b/examples/simple_repeater/main.cpp
+@@ -115,6 +115,10 @@ void setup() {
+ 
+   the_mesh.begin(fs);
+ 
++#if defined(ENABLE_MQTT_OBSERVER)
++  mqtt_observer.begin(&the_mesh, the_mesh.self_id.pub_key);
++#endif
++
+ #ifdef DISPLAY_CLASS
+   ui_task.begin(the_mesh.getNodePrefs(), FIRMWARE_BUILD_DATE, FIRMWARE_VERSION);
+ #endif
+diff --git a/variants/m5stack_unit_c6l/platformio.ini b/variants/m5stack_unit_c6l/platformio.ini
+index 24c17049..93c141b9 100644
+--- a/variants/m5stack_unit_c6l/platformio.ini
++++ b/variants/m5stack_unit_c6l/platformio.ini
+@@ -55,6 +55,25 @@ lib_deps =
+   ${M5Stack_Unit_C6L.lib_deps}
+ ;  ${esp32_ota.lib_deps}
+ 
++[env:M5Stack_Unit_C6L_repeater_observer]
++extends = M5Stack_Unit_C6L
++build_src_filter = ${M5Stack_Unit_C6L.build_src_filter}
++  +<../examples/simple_repeater/*.cpp>
++  +<helpers/wifi/MqttObserverManager.cpp>
++build_flags =
++  ${M5Stack_Unit_C6L.build_flags}
++  -D ADVERT_NAME='"Unit C6L Observer"'
++  -D ADVERT_LAT=0.0
++  -D ADVERT_LON=0.0
++  -D ADMIN_PASSWORD='"password"'
++  -D MAX_NEIGHBOURS=50
++  -D ENABLE_MQTT_OBSERVER=1
++  -D MQTT_MAX_PACKET_SIZE=512
++lib_deps =
++  ${M5Stack_Unit_C6L.lib_deps}
++  knolleary/PubSubClient @ ^2.8
++
++
+ [env:M5Stack_Unit_C6L_room_server]
+ extends = M5Stack_Unit_C6L
+ build_src_filter = ${M5Stack_Unit_C6L.build_src_filter}

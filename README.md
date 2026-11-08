@@ -24,16 +24,23 @@ m5stack-unit-c6l/
 │   │   ├── bootloader.bin               # ESP32-C6 bootloader
 │   │   ├── partitions.bin               # Partition table (min_spiffs.csv)
 │   │   └── README.md                    # Bilingual companion documentation
-│   └── 02-repeater/                     # Standalone Relay / Repeater
-│       ├── firmware.bin                 # Main repeater image (~544 KB)
+│   ├── 02-repeater/                     # Standalone Relay / Repeater
+│   │   ├── firmware.bin                 # Main repeater image (~544 KB)
+│   │   ├── bootloader.bin               # ESP32-C6 bootloader
+│   │   ├── partitions.bin               # Partition table
+│   │   └── README.md                    # Bilingual repeater documentation
+│   └── 03-repeater-observer/            # Standalone Relay + 4x MQTT Observer (Wi-Fi 6)
+│       ├── firmware.bin                 # Repeater+Observer image (~1,276 KB)
 │       ├── bootloader.bin               # ESP32-C6 bootloader
 │       ├── partitions.bin               # Partition table
-│       └── README.md                    # Bilingual repeater documentation
+│       └── README.md                    # Bilingual observer & CLI documentation
 ├── scripts/
 │   ├── flash-companion.bat / .ps1       # Standard flash Companion Radio
 │   ├── flash-companion-clean.bat        # Clean flash Companion (wipes SPIFFS & old data)
 │   ├── flash-repeater.bat / .ps1        # Standard flash Repeater
 │   ├── flash-repeater-clean.bat         # Clean flash Repeater (wipes SPIFFS & old data)
+│   ├── flash-observer.bat / .ps1        # Standard flash Repeater+Observer
+│   ├── flash-observer-clean.bat         # Clean flash Repeater+Observer (wipes SPIFFS & old data)
 │   ├── erase-flash.bat / .ps1           # Full chip flash erase tool
 │   ├── monitor-serial.bat               # 115200 baud serial log monitor
 │   ├── package-release.bat / .ps1       # Package standalone ZIP release bundles
@@ -43,9 +50,12 @@ m5stack-unit-c6l/
 │   ├── target.h                         # Target definition & radio driver bindings
 │   ├── UnitC6LBoard.cpp                 # Expander & peripheral initialization
 │   ├── UnitC6LBoard.h                   # Board class header
-│   └── UnitC6LDisplay.h                 # OLED driver (rotation & drawXBitmap)
+│   ├── UnitC6LDisplay.h                 # OLED driver (rotation & drawXBitmap)
+│   ├── MqttObserverManager.h            # Multi-broker MQTT observer manager header
+│   └── MqttObserverManager.cpp          # Multi-broker MQTT observer manager implementation
 ├── patches/
-│   └── 01-meshcore-uitask-and-ble-pin.patch # Upstream MeshCore source patch
+│   ├── 01-meshcore-uitask-and-ble-pin.patch      # Upstream MeshCore UI & dynamic PIN patch
+│   └── 02-meshcore-repeater-mqtt-observer.patch  # Repeater MQTT observer patch
 └── docs/
     ├── hardware-pinout.md               # Complete GPIO & schematic pinout
     ├── dual-boot-ota.md                 # Dual-boot slot switching guide
@@ -67,6 +77,13 @@ m5stack-unit-c6l/
 - **Mode**: Headless (Zero-UI overhead), reserving maximal RAM for routing tables and packet buffering.
 - **Memory**: 9.1% RAM (29.7 KB / 328 KB), 27.7% Flash (544 KB / 1,966 KB).
 - **Default Advert**: `"Unit C6L Repeater"` / Admin Pass: `"password"`
+
+#### 3. Repeater + Observer (4x MQTT)
+- **Folder**: [`firmware/03-repeater-observer`](firmware/03-repeater-observer)
+- **Role**: Hybrid packet relay and internet-connected observer node. Retransmits packets across the mesh while streaming overheard packets, telemetry, and link metrics (SNR/RSSI) to up to **4 concurrent MQTT brokers** over Wi-Fi 6 (port 1883).
+- **CLI Configuration**: Fully configurable via Serial / Web Serial (`set wifi.*`, `set mqtt.*`, `set mqtt1..4.*`).
+- **Memory**: 19.5% RAM (63.9 KB / 328 KB, >263 KB free heap), 63.6% Flash (1,250 KB / 1,966 KB).
+- **Default Advert**: `"Unit C6L Observer"` / Default IATA: `"WAW"`
 
 ### Quick Start — Flashing
 
@@ -90,6 +107,16 @@ m5stack-unit-c6l/
   .\scripts\flash-repeater.ps1
   ```
 
+#### Flash Repeater + Observer (4x MQTT)
+- **Clean Flash (Recommended)**: Double-click `scripts\flash-observer-clean.bat` or run:
+  ```powershell
+  .\scripts\flash-observer.ps1 -Erase
+  ```
+- **Standard Flash**: Double-click `scripts\flash-observer.bat` or run:
+  ```powershell
+  .\scripts\flash-observer.ps1
+  ```
+
 #### Full Chip Erase
 To wipe all flash partitions completely, double-click `scripts\erase-flash.bat` or run:
 ```powershell
@@ -97,18 +124,13 @@ To wipe all flash partitions completely, double-click `scripts\erase-flash.bat` 
 ```
 
 ### Key Hardware & UI Enhancements
-- **Wi-Fi 6 TCP Interface & Dedicated Screen**: Integrated MeshCore Wi-Fi interface listening on TCP port `5000` with dynamic CLI configuration (`set wifi.ssid`, `set wifi.pwd`, `set wifi.enabled`). Added a dedicated 64x48 OLED screen with an upright Wi-Fi icon, connection telemetry (SSID and auto-wrapped IP address), and long-press toggle (`HOLD: ON/OFF`). Enables controlling and managing MeshCore companion device over home Wi-Fi outside Bluetooth range via port 5000.
-- **Partition Table Expansion (`huge_app.csv`)**: Switched to a 3.0 MB application partition (`huge_app.csv`) to comfortably accommodate both BLE 5.3 and Wi-Fi 6 stacks simultaneously.
-- **Phantom GPS Screen Eliminated (`-UENV_INCLUDE_GPS`)**: Removed inherited GPS configuration that produced scrambled `Gps ' df 1 cces` text on the GPS-less Unit C6L.
+- **4x Concurrent MQTT Broker Observer**: Native uplink streaming to MeshMapper, CoreScope, regional analyzers, and personal custom servers via Wi-Fi 6 with non-blocking single-serialization architecture.
+- **Dynamic CLI Configuration**: Full runtime control over Wi-Fi (`set wifi.ssid`, `set wifi.pwd`, `set wifi.enabled`) and MQTT broker parameters (`set mqtt.iata`, `set mqtt1..4.server`, `set mqtt1..4.preset`).
+- **Wi-Fi 6 TCP Interface & Dedicated Screen**: Integrated MeshCore Wi-Fi interface listening on TCP port `5000` with dynamic CLI configuration.
+- **Partition Table Expansion (`huge_app.csv` / `min_spiffs.csv`)**: Partition layout allocating 1.92–3.0 MB to accommodate Wi-Fi 6 and multi-client networking.
+- **Phantom GPS Screen Eliminated (`-UENV_INCLUDE_GPS`)**: Removed inherited GPS configuration that produced scrambled text on the GPS-less Unit C6L.
 - **Prominent Random BLE PIN**: The 6-digit session PIN (`PIN:%06d`) is generated via `StdRNG` and displayed directly on line 2 of the main screen upon boot.
-- **Battery Info Relocation**: Removed `BAT: 0.00V` from the first screen and moved it to line 5 of the `RADIO` screen (`BAT:%.2fV`), keeping it accessible for external power diagnostics without wasting space on the primary screen.
-- **Accurate Connection State Detection**: Differentiates between USB serial connection, active Bluetooth pairing, and Wi-Fi network link; displays `BLE Ready`, `Connected`, `USB Link`, `BLE: OFF`, and `WIFI:CONN`.
-- **Upright XBM Graphics (`drawXBitmap`)**: Corrected LSB-first bit decoding for the MeshCore splash logo, Bluetooth icon, Wi-Fi icon, broadcast waves, and power button.
-- **Explicit Action Labels**: Added `HOLD: SEND` on the Advert screen, `HOLD: OFF` on the Shutdown screen, and `HOLD: ON/OFF` on the Wi-Fi screen.
-- **Dual-Button Navigation**: Front expander button (`P0`) and side button (`GPIO 9`) both wake the display and cycle menu pages.
-- **15-Second OLED Auto-Off & Click Wake-Up**: Wakes on button click without page jumping and automatically turns off the SSD1306 panel after 15 seconds of inactivity to protect the OLED from burn-in.
-- **Connection-Aware Silent Message Notifications**: Automatically silences message receive chimes and vibration while an interactive app connection is active (Bluetooth, USB wire, or Wi-Fi).
-- **SX1262 LDO Regulator Mode**: Configured `-D SX126X_USE_REGULATOR_LDO=true` to match the Stamp C6LoRa power topology.
+- **SX1262 LDO Regulator Mode**: Configured `-D SX126X_USE_REGULATOR_LDO=true` matching the Stamp C6LoRa power topology.
 
 ---
 
@@ -127,16 +149,23 @@ m5stack-unit-c6l/
 │   │   ├── bootloader.bin               # Bootloader ESP32-C6
 │   │   ├── partitions.bin               # Tabela partycji (min_spiffs.csv)
 │   │   └── README.md                    # Dwujęzyczna dokumentacja radia towarzyszącego
-│   └── 02-repeater/                     # Autonomiczny przekaźnik / repeater
-│       ├── firmware.bin                 # Obraz aplikacji przekaźnika (~544 KB)
+│   ├── 02-repeater/                     # Autonomiczny przekaźnik / repeater
+│   │   ├── firmware.bin                 # Obraz aplikacji przekaźnika (~544 KB)
+│   │   ├── bootloader.bin               # Bootloader ESP32-C6
+│   │   ├── partitions.bin               # Tabela partycji
+│   │   └── README.md                    # Dwujęzyczna dokumentacja repeatera
+│   └── 03-repeater-observer/            # Przekaźnik + 4x MQTT Observer (Wi-Fi 6)
+│       ├── firmware.bin                 # Obraz aplikacji Repeater+Observer (~1 276 KB)
 │       ├── bootloader.bin               # Bootloader ESP32-C6
 │       ├── partitions.bin               # Tabela partycji
-│       └── README.md                    # Dwujęzyczna dokumentacja repeatera
+│       └── README.md                    # Dwujęzyczna dokumentacja observera i komend CLI
 ├── scripts/
 │   ├── flash-companion.bat / .ps1       # Standardowe wgrywanie radia towarzyszącego
 │   ├── flash-companion-clean.bat        # Czyste wgrywanie radia (usuwa stary SPIFFS i konfigurację)
 │   ├── flash-repeater.bat / .ps1        # Standardowe wgrywanie przekaźnika
 │   ├── flash-repeater-clean.bat         # Czyste wgrywanie przekaźnika (usuwa stary SPIFFS)
+│   ├── flash-observer.bat / .ps1        # Standardowe wgrywanie przekaźnika z MQTT Observerem
+│   ├── flash-observer-clean.bat         # Czyste wgrywanie przekaźnika z MQTT Observerem
 │   ├── erase-flash.bat / .ps1           # Narzędzie pełnego czyszczenia pamięci Flash
 │   ├── monitor-serial.bat               # Monitor logów szeregowych (115200 baud)
 │   ├── package-release.bat / .ps1       # Tworzenie paczek wydań ZIP do pobrania
@@ -146,9 +175,12 @@ m5stack-unit-c6l/
 │   ├── target.h                         # Definicje sprzętowe i sterownik radia
 │   ├── UnitC6LBoard.cpp                 # Inicjalizacja ekspandera i peryferiów
 │   ├── UnitC6LBoard.h                   # Nagłówek klasy płytki
-│   └── UnitC6LDisplay.h                 # Sterownik OLED (obrót i funkcja drawXBitmap)
+│   ├── UnitC6LDisplay.h                 # Sterownik OLED (obrót i funkcja drawXBitmap)
+│   ├── MqttObserverManager.h            # Nagłówek menedżera multi-broker MQTT
+│   └── MqttObserverManager.cpp          # Implementacja menedżera multi-broker MQTT
 ├── patches/
-│   └── 01-meshcore-uitask-and-ble-pin.patch # Łatka z kodem źródłowym MeshCore
+│   ├── 01-meshcore-uitask-and-ble-pin.patch      # Łatka z kodem interfejsu i dynamicznego PINu
+│   └── 02-meshcore-repeater-mqtt-observer.patch  # Łatka dodająca obsługę MQTT Observera
 └── docs/
     ├── hardware-pinout.md               # Pełna rozpiska wyprowadzeń GPIO i schematów
     ├── dual-boot-ota.md                 # Poradnik konfiguracji Dual-Boot
@@ -160,9 +192,8 @@ m5stack-unit-c6l/
 #### 1. Radio Towarzyszące — Companion Radio (BLE)
 - **Katalog**: [`firmware/01-companion-radio-ble`](firmware/01-companion-radio-ble)
 - **Rola**: Łączy się z aplikacją mobilną MeshCore przez Bluetooth Low Energy lub port szeregowy USB z wykorzystaniem dynamicznie generowanego kodu PIN dla BLE.
-- **Wyświetlacz**: Ekran 64x48 OLED z przewijanym paskiem statusu, licznikiem wiadomości, statusem połączenia (BLE/USB) oraz parametrami radiowymi.
+- **Wyświetlacz**: Ekran 64x48 OLED ze statusem, licznikiem wiadomości i telemetrią radiową.
 - **Pamięć**: 50.4% RAM (165 KB / 328 KB), 74.9% Flash (1 472 KB / 1 966 KB z `min_spiffs.csv`).
-- **Architektura Wi-Fi**: Układ ESP32-C6 posiada 320 KB pamięci SRAM i nie posiada zewnętrznej pamięci PSRAM. Jednoczesne uruchomienie stosu NimBLE 5.3 oraz Wi-Fi 6 TCP wyczerpuje dostępną pamięć sterty (heap) podczas startu. W celu zagwarantowania 100% stabilności, obsługa Wi-Fi została zachowana za flagą kompilacji `-D ENABLE_WIFI_INTERFACE`, lecz pozostaje wyłączona w wydaniu Companion.
 
 #### 2. Przekaźnik — Repeater (Relay)
 - **Katalog**: [`firmware/02-repeater`](firmware/02-repeater)
@@ -170,6 +201,13 @@ m5stack-unit-c6l/
 - **Tryb**: Headless (brak narzutu interfejsu graficznego), co zapewnia maksymalną ilość wolnego RAM-u na tablice routingu.
 - **Pamięć**: 9.1% RAM (29.7 KB / 328 KB), 27.7% Flash (544 KB / 1 966 KB).
 - **Domyślna nazwa Advert**: `"Unit C6L Repeater"` / Hasło administratora: `"password"`
+
+#### 3. Przekaźnik + Observer — Repeater + Observer (4x MQTT)
+- **Katalog**: [`firmware/03-repeater-observer`](firmware/03-repeater-observer)
+- **Rola**: Hybrydowy węzeł łączący retransmisję pakietów w sieci mesh z jednoczesnym wysyłaniem przechwyconych ramek radiowych, telemetrii i jakości łącza (SNR/RSSI) do maksymalnie **4 równoległych brokerów MQTT** przez sieć Wi-Fi 6 (port 1883).
+- **Konfiguracja CLI**: Pełne zarządzanie przez port szeregowy (`set wifi.*`, `set mqtt.*`, `set mqtt1..4.*`).
+- **Pamięć**: 19.5% RAM (63.9 KB / 328 KB, >263 KB wolnego RAM-u), 63.6% Flash (1 250 KB / 1 966 KB).
+- **Domyślna nazwa Advert**: `"Unit C6L Observer"` / Domyślny IATA: `"WAW"`
 
 ### Szybki Start — Wgrywanie Oprogramowania
 
@@ -193,22 +231,24 @@ m5stack-unit-c6l/
   .\scripts\flash-repeater.ps1
   ```
 
+#### Wgrywanie Przekaźnika z Observerem (Repeater + 4x MQTT)
+- **Czyste Wgrywanie (Zalecane)**: Kliknij dwukrotnie `scripts\flash-observer-clean.bat` lub uruchom:
+  ```powershell
+  .\scripts\flash-observer.ps1 -Erase
+  ```
+- **Standardowe Wgrywanie**: Kliknij dwukrotnie `scripts\flash-observer.bat` lub uruchom:
+  ```powershell
+  .\scripts\flash-observer.ps1
+  ```
+
 #### Pełne Czyszczenie Pamięci Urządzenia
 Aby całkowicie wymazać wszystkie partycje pamięci Flash, kliknij dwukrotnie `scripts\erase-flash.bat` lub uruchom:
 ```powershell
 .\scripts\erase-flash.ps1
 ```
 
-### Kluczowe Usprawnienia Sprzętowe i Graficzne
-- **Obsługa Sieci Wi-Fi i Dedykowany Ekran**: Zintegrowano interfejs sieciowy MeshCore TCP na porcie `5000` z dynamiczną konfiguracją przez CLI (`set wifi.ssid`, `set wifi.pwd`, `set wifi.enabled`). Dodano dedykowany ekran 64x48 OLED z czytelną ikoną Wi-Fi, statusem połączenia (nazwa SSID oraz zawijany adres IP) i przełączaniem długim wciśnięciem (`HOLD: ON/OFF`). Umożliwia to zarządzanie urządzeniem poza zasięgiem Bluetooth w domowej sieci Wi-Fi.
-- **Rozszerzona Tabela Partycji (`huge_app.csv`)**: Zastosowano partycję aplikacji 3.0 MB (`huge_app.csv`), aby bez problemu pomieścić jednoczesną obsługę stosów BLE 5.3 oraz Wi-Fi 6.
-- **Usunięcie Nieprawidłowego Ekranu GPS (`-UENV_INCLUDE_GPS`)**: Wyeliminowano odziedziczoną konfigurację GPS, która powodowała nakładanie się napisów i tworzenie nieczytelnego ciągu `Gps ' df 1 cces` na urządzeniu bez modułu GPS.
-- **Widoczny Losowy Kod PIN BLE**: 6-cyfrowy kod PIN (`PIN:%06d`) jest generowany za pomocą `StdRNG` i wyświetlany w 2. linii ekranu głównego zaraz po uruchomieniu.
-- **Przeniesienie Odczytu Baterii**: Usunięto odczyt `BAT: 0.00V` z pierwszego ekranu i przeniesiono go do 5. linii ekranu radiowego (`BAT:%.2fV`), dzięki czemu nie zajmuje cennego miejsca na ekranie głównym.
-- **Precyzyjna Detekcja Stanu Połączenia**: Urządzenie rozróżnia połączenie przewodowe USB, aktywne połączenie Bluetooth oraz łącze Wi-Fi; wyświetla stany `BLE Ready`, `Connected`, `USB Link`, `BLE: OFF` oraz `WIFI:CONN`.
-- **Prawidłowe Renderowanie Ikon XBM (`drawXBitmap`)**: Zastosowano dekodowanie LSB-first, usuwając efekt lustrzanego odbicia logo powitalnego, ikony Bluetooth, ikony Wi-Fi, fal nadawania i przycisku zasilania.
-- **Czytelne Etykiety Akcji Pod Ikonami**: Dodano podpisy `HOLD: SEND` na ekranie rozgłaszania, `HOLD: OFF` na ekranie wyłączania oraz `HOLD: ON/OFF` na ekranie Wi-Fi.
-- **Nawigacja Dwoma Przyciskami**: Zarówno przedni przycisk ekspandera (`P0`), jak i boczny przycisk (`GPIO 9`) wybudzają ekran i zmieniają strony menu.
-- **Automatyczne Wygaszanie Ekranu po 15 Sekundach i Wybudzanie Przyciskiem**: Wybudza ekran po naciśnięciu przycisku bez przeskakiwania strony oraz samoczynnie wygasza panel SSD1306 po 15 sekundach bezczynności w celu ochrony przed wypaleniem.
-- **Wyciszanie Powiadomień Dźwiękowych przy Aktywnym Połączeniu**: Automatycznie wycisza sygnały dźwiękowe buzzera oraz wibracje przy nadejściu wiadomości, gdy urządzenie jest połączone z aplikacją (Bluetooth, kabel USB lub Wi-Fi).
+### Kluczowe Usprawnienia i Nowości
+- **4 Równoległe Połączenia MQTT Observer**: Natywne strumieniowanie danych do MeshMapper, CoreScope, serwerów regionalnych oraz własnego serwera testowego przez Wi-Fi 6 z asynchronicznym kolejkowaniem pakietów.
+- **Dynamiczna Konfiguracja CLI**: Pełna edycja parametrów Wi-Fi (`set wifi.ssid`, `set wifi.pwd`, `set wifi.enabled`) oraz slotów brokerów MQTT (`set mqtt.iata`, `set mqtt1..4.server`, `set mqtt1..4.preset`).
+- **Niski Narzut Pamięciowy**: W trybie Observera zajęte jest zaledwie 19.5% pamięci RAM, co pozostawia ponad 263 KB wolnej sterty na tablice routingu mesh i bufory sieciowe.
 - **Tryb Regulatora LDO SX1262**: Włączono `-D SX126X_USE_REGULATOR_LDO=true`, co eliminuje zawieszanie się modułu radiowego na starcie.
